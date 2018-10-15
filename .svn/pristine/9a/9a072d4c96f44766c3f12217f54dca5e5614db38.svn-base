@@ -1,0 +1,16 @@
+//
+//  YHProductClassifyViewController.h
+//  emake
+//
+//  Created by 谷伟 on 2017/12/7.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#import "BaseViewController.h"
+#import "YHGoodsModel.h"
+#import "YHUserModel.h"
+typedef void (^ProductBlock) (YHGoodsModel *model);
+@interface YHProductClassifyViewController : BaseViewController
+@property (nonatomic,copy)ProductBlock productBlock;
+@property (nonatomic,copy)NSString *userId;
+@end

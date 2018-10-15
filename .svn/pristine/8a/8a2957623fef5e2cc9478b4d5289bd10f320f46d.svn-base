@@ -1,0 +1,88 @@
+//
+//  MessageModel.h
+//  JMessage-AuroraIMUI-OC-Demo
+//
+//  Created by oshumini on 2017/6/6.
+//  Copyright © 2017年 HXHG. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "EmakeServers-Swift.h"
+#import <UIKit/UIKit.h>
+
+
+@interface MessageModel : NSObject <IMUIMessageModelProtocol>
+
+@property (nonatomic, readonly, copy) NSString * _Nonnull msgId;
+
+@property (nonatomic, readonly, strong) id <IMUIUserProtocol> _Nonnull fromUser;
+
+@property (nonatomic, readonly, strong) id <IMUIMessageCellLayoutProtocol> _Nonnull layout;
+
+@property (nonatomic, readonly, strong) UIImage * _Nonnull resizableBubbleImage;
+
+@property (nonatomic, readonly, copy) NSString * _Nonnull timeString;
+
+- (NSString * _Nonnull)text SWIFT_WARN_UNUSED_RESULT;
+
+- (NSString * _Nonnull)mediaFilePath SWIFT_WARN_UNUSED_RESULT;
+
+@property (nonatomic, readonly) CGFloat duration;
+
+@property (nonatomic, readonly) BOOL isOutGoing;
+
+@property (nonatomic, readonly) enum IMUIMessageStatus messageStatus;
+
+@property (nonatomic,readonly) NSString * _Nullable ContactURL;
+
+@property (assign, nonatomic) NSString * _Nullable type;
+
+@property (assign, nonatomic) NSString * _Nullable ContactNo;
+
+@property (assign, nonatomic) NSString * _Nullable ContactState;
+
+@property (assign, nonatomic) NSString * _Nullable ContactType;
+
+@property (assign, nonatomic) NSString * _Nullable productPrice;
+
+@property (assign, nonatomic) NSString * _Nullable productName;
+
+@property (assign, nonatomic) NSString * _Nullable productImage;
+//文字
+- (instancetype)initWithText:(NSString *)text
+           messageId:(NSString *)msgId
+            fromUser:(id <IMUIUserProtocol>)fromUser
+            timeString:(NSString *)timeString
+            isOutgoing:(BOOL)isOutGoing
+                status:(IMUIMessageStatus) messageStatus;
+//图片
+- (instancetype)initWithImagePath:(NSString *) mediaPath
+           messageId:(NSString *)msgId
+            fromUser:(id <IMUIUserProtocol>)fromUser
+          timeString:(NSString *)timeString
+          isOutgoing:(BOOL)isOutGoing
+              status:(IMUIMessageStatus) messageStatus;
+//音频
+- (instancetype)initWithVoicePath:(NSString *) mediaPath
+                 duration:(CGFloat)duration
+                messageId:(NSString *)msgId
+                 fromUser:(id <IMUIUserProtocol>)fromUser
+               timeString:(NSString *)timeString
+               isOutgoing:(BOOL)isOutGoing
+                   status:(IMUIMessageStatus) messageStatus;
+//视频
+- (instancetype)initWithVideoPath:(NSString *) mediaPath
+                messageId:(NSString *)msgId
+                 fromUser:(id <IMUIUserProtocol>)fromUser
+               timeString:(NSString *)timeString
+               isOutgoing:(BOOL)isOutGoing
+                   status:(IMUIMessageStatus) messageStatus;
+//合同
+- (instancetype)initWithText:(NSString *)text ContractNo:(NSString *)ContractNo ContractImagePath:(NSString *)mediaPath ContractURL:(NSString *)url messageId:(NSString *)msgId fromUser:(id<IMUIUserProtocol>)fromUser timeString:(NSString *)timeString isOutgoing:(BOOL)isOutGoing status:(IMUIMessageStatus)messageStatus;
+//产品
+- (instancetype)initWithProductJsonText:(NSString *)jsonText messageId:(NSString *)msgId fromUser:(id<IMUIUserProtocol>)fromUser timeString:(NSString *)timeString isOutgoing:(BOOL)isOutGoing status:(IMUIMessageStatus)messageStatus;
+//文件
+- (instancetype)initWithFileText:(NSString *)fileText messageId:(NSString *)msgId fromUser:(id<IMUIUserProtocol>)fromUser timeString:(NSString *)timeString isOutgoing:(BOOL)isOutGoing status:(IMUIMessageStatus)messageStatus;
+@end
+
+

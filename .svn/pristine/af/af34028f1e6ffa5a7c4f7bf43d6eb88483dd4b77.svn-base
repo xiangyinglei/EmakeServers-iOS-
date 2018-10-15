@@ -1,0 +1,203 @@
+//
+//  YHUserMainViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/1/31.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHUserMainViewController.h"
+#import "YHUserHeaderCell.h"
+#import "Header.h"
+#import "YHUserCommonCell.h"
+#import "YHAllUserViewController.h"
+#import "YHAuditUserViewController.h"
+#import "YHTitleView.h"
+@interface YHUserMainViewController ()<UITableViewDataSource,UITableViewDelegate,YHTitleViewViewDelegete>
+@property (nonatomic,retain)UITableView *tableView;
+@property (nonatomic,retain)NSArray *titles;
+@property (nonatomic,retain)NSDictionary *userDic;
+@property (nonatomic,retain)NSDictionary *userLastWeekDic;
+
+@end
+
+@implementation YHUserMainViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"平台";
+    self.navigationItem.leftBarButtonItem = nil;
+    // Do any additional setup after loading the view.
+    self.view.backgroundColor = TextColor_F7F7F7;
+    self.titles = [NSArray arrayWithObjects:@"新签约合伙人",@"新增用户", @"上周订单总额",nil];
+    [self configSubviews];
+}
+-(void)viewWillAppear:(BOOL)animated{
+    
+    [super viewWillAppear:animated];
+    [self getuserData];
+    [self getUserDetailInfoWithIndex:1];
+    [Tools getAllFileNames];
+}
+- (void)configSubviews{
+    
+    self.tableView = [[UITableView alloc]initWithFrame:CGRectZero style:UITableViewStylePlain];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.showsVerticalScrollIndicator = false;
+    self.tableView.showsHorizontalScrollIndicator = false;
+    self.tableView.separatorColor = [UIColor clearColor];
+    self.tableView.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:self.tableView];
+    
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.bottom.mas_equalTo(0);
+        make.right.mas_equalTo(0);
+    }];
+
+}
+-(void)getuserData{
+    [[YHJsonRequest shared] getAllUsersNumberSuccessBlock:^(NSDictionary *successMessage) {
+        if (successMessage.count>0) {
+            self.userDic = successMessage;
+            [self.tableView reloadData];
+        }
+    } fialureBlock:^(NSString *errorMessages) {
+        
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (void)getUserDetailInfoWithIndex:(NSInteger)index{
+    [[YHJsonRequest shared] getLastUsersNumberWithIndex:index SuccessBlock:^(NSDictionary *successMessage) {
+        if (successMessage.count>0) {
+            self.userLastWeekDic = successMessage;
+            NSIndexPath *indexPath1 = [NSIndexPath indexPathForRow:0 inSection:1];
+            NSIndexPath *indexPath2 = [NSIndexPath indexPathForRow:1 inSection:1];
+            NSIndexPath *indexPath3 = [NSIndexPath indexPathForRow:2 inSection:1];
+            [self.tableView reloadRowsAtIndexPaths:@[indexPath1,indexPath2,indexPath3] withRowAnimation:UITableViewRowAnimationNone];
+        }
+    } fialureBlock:^(NSString *errorMessages) {
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (void)goAllUserVC{
+    
+    YHAllUserViewController *vc = [[YHAllUserViewController alloc]init];
+    vc.hidesBottomBarWhenPushed = YES;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+- (void)goAuditUserVC{
+    
+    YHAuditUserViewController *vc = [[YHAuditUserViewController alloc]init];
+    vc.hidesBottomBarWhenPushed = YES;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+#pragma mark ---UITableViewDataSource,UITableViewDelegate
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    if (indexPath.section == 0) {
+        YHUserHeaderCell *cell = nil;
+        if (!cell) {
+            cell =[[YHUserHeaderCell alloc]init];
+        }
+        UITapGestureRecognizer *gestureOne = [[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(goAllUserVC)];
+        [cell.viewOne addGestureRecognizer:gestureOne];
+        NSNumber *AuditUserNum =self.userDic[@"AuditUserNum"];
+        NSNumber *ALLUserNum =self.userDic[@"ALLUserNum"];
+        cell.AuditNumberLable.text =[NSString stringWithFormat:@"%@",AuditUserNum.integerValue? self.userDic[@"AuditUserNum"]:@"0"] ;
+        UIImageView *image = (UIImageView *)[cell.viewTwo viewWithTag:100];
+        if (cell.AuditNumberLable.text.integerValue<=0) {
+            [image clearBadge];
+
+        }else{
+            image.badgeCenterOffset = CGPointMake(WidthRate(-11), WidthRate(11));
+            [image showBadgeWithStyle:WBadgeStyleRedDot value:0 animationType:WBadgeAnimTypeNone];
+        }
+        cell.alluserNumberLable.text = [NSString stringWithFormat:@"%@",ALLUserNum.integerValue?self.userDic[@"ALLUserNum"]:@"0"];
+
+        UITapGestureRecognizer *gestureTwo = [[UITapGestureRecognizer alloc]initWithTarget:self action:@selector(goAuditUserVC)];
+        [cell.viewTwo addGestureRecognizer:gestureTwo];
+        
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }else{
+        YHUserCommonCell *cell = nil;
+        if (!cell) {
+            cell =[[YHUserCommonCell alloc]init];
+        }
+        cell.nameLabel.text = self.titles[indexPath.row];
+        if (indexPath.row == 0) {
+            cell.headImage.image = [UIImage imageNamed:@"xinqianyuehehuoren"];
+            cell.countLabel.text = [NSString stringWithFormat:@"%ld",[self.userLastWeekDic[@"AuditUserNum"] integerValue]];
+        }else if (indexPath.row == 1) {
+            cell.headImage.image = [UIImage imageNamed:@"xinzengyonghu"];
+            cell.countLabel.text = [NSString stringWithFormat:@"%ld",[self.userLastWeekDic[@"ALLUserNum"] integerValue]];
+
+        }else{
+            cell.headImage.image = [UIImage imageNamed:@"shangzhoudingdan"];
+            NSString *price =self.userLastWeekDic[@"ALLPrice"];
+            
+            cell.countLabel.text = [NSString stringWithFormat:@"¥%.2f",floorNumber(price.doubleValue)];
+
+        }
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    return 2;
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    if (section == 0) {
+        return 1;
+    }else{
+        return 3;
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+
+    if (indexPath.section == 0){
+        return HeightRate(170);
+    }else{
+        return HeightRate(60);
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+    if (section == 0) {
+        return TableViewHeaderNone;
+    }else{
+        return HeightRate(40);
+    }
+}
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
+    if (section == 1) {
+        YHTitleView *title = [[YHTitleView alloc] initWithCommonFrame:CGRectMake(0, 0, ScreenWidth, HeightRate(40)) titleFont:14 delegate:self andTitleArray:@[@"上周",@"本周",@"上月",@"本月"]];
+        title.backgroundColor = TextColor_F5F5F5;
+        return title;
+    }else{
+        return nil;
+    }
+}
+#pragma mark --- YHTitleViewViewDelegete
+- (void)titleView:(id)titleView selectItemWithIndex:(NSInteger)index{
+    [self getUserDetailInfoWithIndex:index+1];
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

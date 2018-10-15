@@ -1,0 +1,10 @@
+platform :ios, '10.0'
+use_frameworks!
+
+target 'EmakeServers' do
+    pod 'Masonry'
+    pod 'SKFPicPreview'
+    pod 'MQTTClient'
+    pod 'SVGKit', :git => 'https://github.com/SVGKit/SVGKit.git', :branch => '2.x'
+    pod 'PGDatePicker'
+end

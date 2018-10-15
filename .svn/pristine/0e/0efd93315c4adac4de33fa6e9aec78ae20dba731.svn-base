@@ -1,0 +1,64 @@
+//
+//  YHOrderHeaderRevelanceCell.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/6/6.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHOrderHeaderRevelanceCell.h"
+#import "Header.h"
+
+@implementation YHOrderHeaderRevelanceCell
+- (instancetype)init{
+    if (self = [super init]) {
+    
+        self.labelOrderNo = [[UILabel alloc]init];
+        self.labelOrderNo.textColor = TextColor_999999;
+        self.labelOrderNo.font = SYSTEM_FONT(AdaptFont(13));
+        self.labelOrderNo.text = @"订单号";
+        [self.contentView addSubview:self.labelOrderNo];
+        
+        [self.labelOrderNo mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(WidthRate(24));
+            make.centerY.mas_equalTo(self.contentView.mas_centerY);
+        }];
+        
+        self.labelTime = [[UILabel alloc]init];
+        self.labelTime.textColor = TextColor_999999;
+        self.labelTime.font = SYSTEM_FONT(AdaptFont(12));
+        self.labelTime.text = @"订单号";
+        [self.contentView addSubview:self.labelTime];
+        
+        [self.labelTime mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(WidthRate(-15));
+            make.centerY.mas_equalTo(self.contentView.mas_centerY);
+        }];
+        
+        
+        self.labelState = [[UILabel alloc]init];
+        self.labelState.textColor = ColorWithHexString(SymbolTopColor);
+        self.labelState.font = SYSTEM_FONT(AdaptFont(12));
+        self.labelState.text = @"订单号";
+        [self.contentView addSubview:self.labelState];
+        
+        [self.labelState mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(self.labelTime.mas_left).offset(WidthRate(-5));
+            make.centerY.mas_equalTo(self.contentView.mas_centerY);
+        }];
+        
+    }
+    return self;
+}
+- (void)awakeFromNib {
+    [super awakeFromNib];
+    // Initialization code
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

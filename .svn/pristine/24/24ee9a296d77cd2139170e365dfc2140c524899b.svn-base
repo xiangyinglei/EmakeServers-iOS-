@@ -1,0 +1,135 @@
+//
+//  OSSClient.m
+//  emake
+//
+//  Created by apple on 2017/8/23.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#import "OSSClientLike.h"
+#import <AliyunOSSiOS/OSSService.h>
+#import "Tools.h"
+@interface OSSClientLike(){
+    
+    OSSClient * client;
+    
+}
+@end
+
+@implementation OSSClientLike
+
++(OSSClientLike *)sharedClient{
+    static OSSClientLike *handler = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        handler = [[OSSClientLike alloc] init];
+    });
+    [handler initOSSClient];
+    return handler;
+}
+- (void)initOSSClient{
+    
+    id<OSSCredentialProvider> credential = [[OSSCustomSignerCredentialProvider alloc] initWithImplementedSigner:^NSString *(NSString *contentToSign, NSError *__autoreleasing *error) {
+        NSString *signature = [OSSUtil calBase64Sha1WithData:contentToSign withSecret:@"PrEtbqO724fBsVSw8spLWtSPpaJclM"];
+        if (signature != nil) {
+            *error = nil;
+        } else {
+            *error = [NSError errorWithDomain:@"<your error domain>" code:OSSClientErrorCodeSignFailed userInfo:nil];
+            return nil;
+        }
+        return [NSString stringWithFormat:@"OSS %@:%@", @"LTAIGYyQ8ZKKH72N", signature];
+    }];
+    OSSClientConfiguration * conf = [OSSClientConfiguration new];
+    conf.maxRetryCount = 2;
+    conf.timeoutIntervalForRequest = 30;
+    conf.timeoutIntervalForResource = 24 * 60 * 60;
+    client = [[OSSClient alloc] initWithEndpoint:endPoint credentialProvider:credential clientConfiguration:conf];
+}
+
+- (void)uploadObjectAsync:(UIImage *)uploadImage withFileName:(NSString *)fileName andType:(OSSUploadType)type succcessBlock:(void(^)())success failBLock:(void(^)())failBlock{
+    
+
+    OSSPutObjectRequest * put = [OSSPutObjectRequest new];
+    put.bucketName = @"img-emake-cn";
+    put.objectKey = [NSString stringWithFormat:@"images/%@.png",fileName];
+    NSData *data = UIImageJPEGRepresentation(uploadImage, 1.0);
+    float compressRate = 1.0;
+    if ([Tools getDataSize:data.length] > 0.3) {
+        compressRate = [Tools getDataSize:data.length]/(0.3);
+    }
+    put.uploadingData = UIImageJPEGRepresentation(uploadImage, compressRate);
+    OSSTask * putTask = [client putObject:put];
+    [putTask continueWithBlock:^id(OSSTask *task) {
+        NSLog(@"objectKey: %@", put.objectKey);
+        if (!task.error) {
+            NSLog(@"upload object success!");
+            success();
+        } else {
+            failBlock();
+            NSLog(@"upload object failed, error: %@" , task.error);
+        }
+        return nil;
+    }];
+}
+- (void)uploadVoiceObjectAsync:(NSString *)uploadPath withFileName:(NSString *)fileName andType:(OSSUploadType)type succcessBlock:(void(^)())success failBLock:(void(^)())failBlock{
+    
+    OSSPutObjectRequest * put = [OSSPutObjectRequest new];
+    put.bucketName = @"voi-emake-cn";
+    put.objectKey = [NSString stringWithFormat:@"mqtt/%@.m4a",fileName];
+    put.contentType = @"media-type";
+    put.uploadingData = [NSData dataWithContentsOfFile:uploadPath];
+    OSSTask * putTask = [client putObject:put];
+    [putTask continueWithBlock:^id(OSSTask *task) {
+        NSLog(@"objectKey: %@", put.objectKey);
+        if (!task.error) {
+            NSLog(@"upload object success!");
+            success();
+        } else {
+            failBlock();
+            NSLog(@"upload object failed, error: %@" , task.error);
+        }
+        return nil;
+    }];
+
+}
+- (void)uploadFileObjectAsync:(NSData *)uploadData withFileName:(NSString *)fileName andType:(OSSUploadType)type succcessBlock:(void(^)())success failBLock:(void(^)())failBlock{
+    
+    OSSPutObjectRequest * put = [OSSPutObjectRequest new];
+    put.bucketName = @"voi-emake-cn";
+    put.objectKey = [NSString stringWithFormat:@"files/%@",fileName];
+    put.uploadingData = uploadData;
+    OSSTask * putTask = [client putObject:put];
+    [putTask continueWithBlock:^id(OSSTask *task) {
+        NSLog(@"objectKey: %@", put.objectKey);
+        if (!task.error) {
+            NSLog(@"upload object success!");
+            success();
+        } else {
+            failBlock();
+            NSLog(@"upload object failed, error: %@" , task.error);
+        }
+        return nil;
+    }];
+}
+- (void)downloadFileObjectAsyncWithFileName:(NSString *)fileName andDownloadTargetFile:(NSString *)downLoadFile succcessBlock:(void(^)())success failBLock:(void(^)())failBlock{
+    
+    OSSGetObjectRequest * request = [OSSGetObjectRequest new];
+    request.bucketName = @"voi-emake-cn";
+    request.objectKey = [NSString stringWithFormat:@"files/%@",fileName];
+    request.downloadToFileURL = [NSURL fileURLWithPath:downLoadFile];
+    OSSTask * getTask = [client getObject:request];
+    [getTask continueWithBlock:^id(OSSTask *task) {
+        if (!task.error) {
+            NSLog(@"download object success!");
+            OSSGetObjectResult * getResult = task.result;
+            NSLog(@"download result: %@", getResult.downloadedData);
+            success();
+        } else {
+            failBlock();
+            NSLog(@"download object failed, error: %@" ,task.error);
+        }
+        return nil;
+    }];
+}
+
+@end

@@ -1,0 +1,22 @@
+//
+//  YHItemModel.h
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/8/24.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+
+@interface YHItemModel : NSObject
+@property (nonatomic,copy)NSString *GoodsExplain;
+@property (nonatomic,copy)NSString *GoodsNumber;
+@property (nonatomic,copy)NSString *GoodsSeriesCode;
+@property (nonatomic,copy)NSString *GoodsSeriesIcon;
+@property (nonatomic,copy)NSString *GoodsTitle;
+@property (nonatomic,copy)NSString *MainMakePrice;
+@property (nonatomic,copy)NSString *MainProductId;
+@property (nonatomic,copy)NSString *MainProductPrice;
+@property (nonatomic,copy)NSString *ProductGroupPrice;
+@property (nonatomic,copy)NSString *TotalShippingFee;
+@end

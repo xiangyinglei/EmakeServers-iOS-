@@ -1,0 +1,83 @@
+//
+//  IMUIOptionCollectionViewCell.swift
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/4/27.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+import UIKit
+
+class IMUIOptionCollectionViewCell: UICollectionViewCell , IMUINewFeatureCellProtocol{
+    var featureDelegate: IMUINewFeatureViewDelegate?
+    @IBOutlet weak var functionCollectionView: UICollectionView!
+    let optionArray = ["相册","拍摄","快捷回复","商品详情"]
+    let optionImageArray = ["xiangce","xiangji","kuaijiefasong","shangpinxiangqing"]
+    override func awakeFromNib() {
+        super.awakeFromNib()
+        // Initialization code
+        let bundle = Bundle.imuiNewInputViewBundle()
+        self.functionCollectionView.register(UINib(nibName: "IMUIFunctionCollectionViewCell", bundle: bundle), forCellWithReuseIdentifier: "IMUIFunctionCell")
+        functionCollectionView.delegate = self
+        functionCollectionView.dataSource = self
+        self.functionCollectionView.reloadData()
+    }
+
+}
+extension IMUIOptionCollectionViewCell: UICollectionViewDataSource, UICollectionViewDelegate,UICollectionViewDelegateFlowLayout {
+    
+    public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return 3
+    }
+    
+    public func numberOfSections(in collectionView: UICollectionView) -> Int {
+        return 1
+    }
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat{
+        return 15
+    }
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
+        return UIEdgeInsetsMake(25, 30, 25, 30)
+    }
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        return CGSize(width: 52, height: 78)
+    }
+    
+    func collectionView(_ collectionView: UICollectionView,
+                        layout collectionViewLayout: UICollectionViewLayout,
+                        referenceSizeForFooterInSection section: Int) -> CGSize {
+        return CGSize.zero
+    }
+    
+    public func collectionView(_ collectionView: UICollectionView,
+                               cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "IMUIFunctionCell", for: indexPath) as! IMUIFunctionCollectionViewCell
+        cell.optionTitle.text = optionArray[indexPath.item]
+        cell.optionImage.image = UIImage(named: optionImageArray[indexPath.item])
+        return cell
+    }
+    
+    public func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        
+        switch indexPath.item {
+        
+        case 0:
+            self.featureDelegate?.didSelectPhoto()
+        case 1:
+            self.featureDelegate?.didShotPicture()
+        case 2:
+            self.featureDelegate?.didSelectedConvenientReply()
+        case 3:
+            self.featureDelegate?.didSelectedProfuct()
+        default:
+            break
+        }
+        
+    }
+    
+    public func collectionView(_ collectionView: UICollectionView, didEndDisplaying: UICollectionViewCell, forItemAt: IndexPath) {
+    }
+    
+}
+

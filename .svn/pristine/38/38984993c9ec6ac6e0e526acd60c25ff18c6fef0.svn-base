@@ -1,0 +1,138 @@
+//
+//  AppDelegate.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/1/30.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "AppDelegate.h"
+#import "Header.h"
+#import "YHTabBarViewController.h"
+#import <CoreLocation/CoreLocation.h>
+#import "YHAllUserMessageListViewController.h"
+#import "YHAFNetWorkingRequset.h"
+@interface AppDelegate ()<CLLocationManagerDelegate>{
+    CLLocationManager * locationManager;
+    NSTimer *_timer;
+    int aa;
+    __block UIBackgroundTaskIdentifier _backIden;
+}
+@end
+
+@implementation AppDelegate
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    // Override point for customization after application launch.
+    
+    //注册通知
+    [[JZUserNotification sharedNotification] registerNotification];
+    
+    //网络监听
+    [[YHAFNetWorkingRequset sharedRequset] monitorNetworkStatus];
+    
+    //MQTT
+    if ([[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID]) {
+        NSString *ServiceID = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID];
+        NSString *topic = [NSString stringWithFormat:@"customer/%@",ServiceID];
+        [[YHMQTTClient sharedClient] connectToHost:MQTT_IP Port:MQTT_PORT subcriceCMDTopic:topic withServerId:ServiceID];
+        
+    }
+    self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+    self.window.backgroundColor = [UIColor whiteColor];
+    YHTabBarViewController *tab = [[YHTabBarViewController alloc] init];
+    self.window.rootViewController = tab;
+    [self.window makeKeyAndVisible];
+    return YES;
+}
+
+// 禁止横屏
+- (UIInterfaceOrientationMask)application:(UIApplication *)application supportedInterfaceOrientationsForWindow:(UIWindow *)window {
+    
+    return UIInterfaceOrientationMaskPortrait;
+}
+
+- (void)applicationWillResignActive:(UIApplication *)application {
+    // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
+    // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
+}
+
+
+- (void)applicationDidEnterBackground:(UIApplication *)application {
+    // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
+    // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+    [locationManager startUpdatingLocation];
+    [self beginTask];
+    aa =0;
+    _timer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(go:) userInfo:nil repeats:YES];
+}
+
+- (void)applicationWillEnterForeground:(UIApplication *)application {
+    // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
+}
+
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+}
+
+
+- (void)applicationWillTerminate:(UIApplication *)application {
+    // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+}
+- (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(nullable NSString *)sourceApplication annotation:(id)annotation {
+    if (self.window) {
+        if (url){
+            
+            if ([[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID] == nil) {
+                [[Tools currentViewController].view makeToast:@"请登录后重新操作" duration:1.0 position:CSToastPositionBottom];
+                return YES;
+            }
+            NSString *messageIdString = [[NSUUID UUID] UUIDString];
+            NSString *fileNameStr = [url lastPathComponent];
+            NSString *fileNameTotal = [NSString stringWithFormat:@"%@_%@",messageIdString,fileNameStr];
+            if (![[NSFileManager defaultManager] fileExistsAtPath:[Tools getPath:fileNameTotal]]) {
+                NSData *data = [NSData dataWithContentsOfURL:url];
+                if (data.bytes>0&&data) {
+                    BOOL isSuccess = [data writeToFile:[Tools getPath:fileNameTotal] atomically:YES];
+                    if (isSuccess) {
+                        NSLog(@"写入成功");
+                    }else{
+                        NSLog(@"写入失败");
+                    }
+                }
+            }
+            NSData *data = [NSData dataWithContentsOfURL:url];
+            YHAllUserMessageListViewController *vc = [[YHAllUserMessageListViewController alloc]init];
+            vc.filePath = messageIdString;
+            vc.fileName = fileNameStr;
+            vc.fileData = data;
+            vc.hidesBottomBarWhenPushed = YES;
+            [[Tools currentNavigationController] pushViewController:vc animated:false];
+        }
+    }
+    return YES;
+}
+
+-(void)go:(NSTimer *)time{
+    
+    aa++;
+    if (aa==24*60*60) {
+        [_timer invalidate];
+        [self endBack]; // 任务执行完毕，主动调用该方法结束任务
+    }
+}
+-(void)beginTask{
+    
+    _backIden = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+        
+        [self endBack]; // 如果在系统规定时间内任务还没有完成，在时间到之前会调用到这个方法，一般是10分钟
+    }];
+}
+-(void)endBack{
+    
+    [[UIApplication sharedApplication] endBackgroundTask:_backIden];
+    _backIden = UIBackgroundTaskInvalid;
+    
+}
+@end

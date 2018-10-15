@@ -1,0 +1,358 @@
+//
+//  YHUserAuditedViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/2/1.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHUserAuditedViewController.h"
+#import "Header.h"
+#import "YHMineTableViewCell.h"
+#import "YHUserInfoHeaderTableViewCell.h"
+#import "ChatNewViewController.h"
+#import "YHMessageClassifyMainViewController.h"
+#import "YHMessageClassifyOrderViewController.h"
+@interface YHUserAuditedViewController ()<UITableViewDataSource,UITableViewDelegate>
+@property (nonatomic,retain)UITableView *tableView;
+@property (nonatomic,retain)NSArray *leftTilteOne;
+@property (nonatomic,retain)NSArray *leftTilteTwo;
+@property (nonatomic,retain)NSArray *leftTilteThree;
+@end
+
+@implementation YHUserAuditedViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"基本信息";
+    self.view.backgroundColor = TextColor_F7F7F7;
+    [self configSubViews];
+    [self addRigthDropBtn];
+    self.leftTilteOne = [NSArray arrayWithObjects:@"用户类型：",@"实名认证状态：",@"指定合伙人：",@"推荐人：",@"注册时间：", nil];
+    self.leftTilteTwo = [NSArray arrayWithObjects:@"经营品类：",@"公司：",@"办公电话：",@"部门：",@"职务：",@"E-mail：",@"地址：", nil];
+    self.leftTilteThree = [NSArray arrayWithObjects:@"真实姓名：",@"身份证号码：",@"性别：",@"省：",@"市：", nil];
+    [self configBottomView];
+    [self getUserData];
+    // Do any additional setup after loading the view.
+}
+- (void)getUserData{
+    if (self.userId) {
+        [[YHJsonRequest shared] getUsersInfoWithUserId:self.userId SucceededBlock:^(YHUserModel *model) {
+            self.model = model;
+            [self.tableView reloadData];
+        } failedBlock:^(NSString *errorMessage) {
+            [self.view makeToast:errorMessage duration:1.0 position:CSToastPositionCenter];
+        }];
+    }
+}
+- (void)configBottomView{
+    UIView *view =[[UIView alloc]init];
+    [self.view addSubview:view];
+    
+    [view mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.right.mas_equalTo(0);
+        make.bottom.mas_equalTo(0);
+        make.top.mas_equalTo(self.tableView.mas_bottom);
+    }];
+    
+    UIButton *orderListBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    [orderListBtn setTitle:@"订单列表" forState:UIControlStateNormal];
+    orderListBtn.layer.cornerRadius = WidthRate(3);
+    orderListBtn.titleLabel.font = SYSTEM_FONT(AdaptFont(13));
+    [orderListBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [orderListBtn setBackgroundColor:ColorWithHexString(APP_THEME_MAIN_COLOR)];
+    [orderListBtn addTarget:self action:@selector(getOrderList) forControlEvents:UIControlEventTouchUpInside];
+    [view addSubview:orderListBtn];
+    
+    [orderListBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(WidthRate(115));
+        make.left.mas_equalTo(WidthRate(10));
+        make.centerY.mas_equalTo(view.mas_centerY);
+        make.height.mas_equalTo(HeightRate(40));
+    }];
+    
+    UIButton *sendMessageBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    [sendMessageBtn setTitle:@"发消息" forState:UIControlStateNormal];
+    sendMessageBtn.layer.cornerRadius = WidthRate(3);
+    sendMessageBtn.titleLabel.font = SYSTEM_FONT(AdaptFont(13));
+    [sendMessageBtn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [sendMessageBtn setBackgroundColor:ColorWithHexString(APP_THEME_MAIN_COLOR)];
+    [sendMessageBtn addTarget:self action:@selector(sendMessage) forControlEvents:UIControlEventTouchUpInside];
+    [view addSubview:sendMessageBtn];
+    
+    [sendMessageBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(WidthRate(115));
+        make.right.mas_equalTo(WidthRate(-10));
+        make.centerY.mas_equalTo(view.mas_centerY);
+        make.height.mas_equalTo(HeightRate(40));
+    }];
+    
+    
+    UIButton *lookUpButotn = [UIButton buttonWithType:UIButtonTypeCustom];
+    [lookUpButotn setTitle:@"查看归档信息" forState:UIControlStateNormal];
+    lookUpButotn.layer.cornerRadius = WidthRate(3);
+    lookUpButotn.titleLabel.font = SYSTEM_FONT(AdaptFont(13));
+    [lookUpButotn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [lookUpButotn setBackgroundColor:ColorWithHexString(APP_THEME_MAIN_COLOR)];
+    [lookUpButotn addTarget:self action:@selector(goLookUpMessageClassify) forControlEvents:UIControlEventTouchUpInside];
+    [view addSubview:lookUpButotn];
+    
+    [lookUpButotn mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(WidthRate(115));
+        make.centerX.mas_equalTo(view.mas_centerX);
+        make.centerY.mas_equalTo(view.mas_centerY);
+        make.height.mas_equalTo(HeightRate(40));
+    }];
+}
+- (void)goLookUpMessageClassify{
+    YHMessageClassifyMainViewController *vc = [[YHMessageClassifyMainViewController alloc]init];
+    vc.isLookUp = YES;
+    vc.userId = self.model.UserId;
+    vc.userPhoneNumber = self.model.MobileNumber;
+    vc.userType = self.model.UserType;
+    vc.userName = self.model.RealName;
+    vc.isFromUserInfo = YES;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+- (void)sendMessage{
+    NSString *topic = [NSString stringWithFormat:@"chatroom/%@",self.model.UserId];
+    [[YHMQTTClient sharedClient] subcriceMessageTopic:topic];
+    UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+    ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+    vc.hidesBottomBarWhenPushed = YES;
+    vc.listID = self.model.UserId;
+    vc.userAvatar = self.model.HeadImageUrl;
+    vc.userType = self.model.UserType;
+    if (!self.model.RealName||self.model.RealName.length<=0) {
+        vc.userName = self.model.MobileNumber;
+    }else{
+        vc.userName = self.model.RealName;
+    }
+    vc.phoneNumber = self.model.MobileNumber;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+- (void)getOrderList{
+    
+    YHMessageClassifyOrderViewController *vc = [[YHMessageClassifyOrderViewController alloc] init];
+    vc.userName = self.model.RealName;
+    vc.userId = self.model.UserId;
+    vc.userPhoneNumber = self.model.MobileNumber;
+    vc.isFromUserInfo = YES;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+- (void)configSubViews{
+    
+    self.tableView = [[UITableView alloc]initWithFrame:CGRectZero style:UITableViewStylePlain];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.showsVerticalScrollIndicator = false;
+    self.tableView.showsHorizontalScrollIndicator = false;
+    self.tableView.separatorColor = [UIColor clearColor];
+    self.tableView.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:self.tableView];
+    
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.bottom.mas_equalTo(HeightRate(-65));
+        make.right.mas_equalTo(0);
+    }];
+}
+#pragma mark ---UITableViewDataSource,UITableViewDelegate
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.section == 0) {
+        if (indexPath.row == 0) {
+            YHUserInfoHeaderTableViewCell *cell = nil;
+            if (!cell) {
+                cell =[[YHUserInfoHeaderTableViewCell alloc]init];
+            }
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            [cell setData:self.model];
+            return cell;
+        }else{
+            YHMineTableViewCell *cell = nil;
+            if (!cell) {
+                cell =[[YHMineTableViewCell alloc]init];
+            }
+            cell.leftLabel.text = self.leftTilteOne[indexPath.row-1];
+            switch (indexPath.row) {
+                case 1:
+                    if ([self.model.UserStyle isEqualToString:@"1"]) {
+                        cell.rightLabel.text = @"店铺老板";
+                    }else{
+                        cell.rightLabel.text = @"普通用户";
+                    }
+                    break;
+                case 2:
+                    cell.leftLabel.text = @"性别：";
+                    if ([self.model.Sex isEqualToString:@"0"]) {
+                        cell.rightLabel.text = @"男";
+                    }else if ([self.model.Sex isEqualToString:@"1"]){
+                        cell.rightLabel.text = @"女";
+                    }else{
+                        cell.rightLabel.text = @"保密";
+                    }
+                    break;
+                case 3:
+                    cell.leftLabel.text = @"注册时间：";
+                    cell.rightLabel.text = self.model.CreateTime;
+                    break;
+                case 4:
+                    cell.rightLabel.text = self.model.ReferenceName;
+                    break;
+                case 5:
+                    cell.rightLabel.text = self.model.CreateTime;
+                    break;
+                default:
+                    break;
+            }
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            return cell;
+        }
+    }else{
+        YHMineTableViewCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMineTableViewCell alloc]init];
+        }
+        if (indexPath.section == 1) {
+            cell.leftLabel.text = self.leftTilteTwo[indexPath.row];
+            switch (indexPath.row) {
+                case 0:
+                    cell.rightLabel.text = self.model.BusinessCategoryName;
+                    break;
+                case 1:
+                    cell.rightLabel.text = self.model.Company;
+                    break;
+                case 2:
+                    cell.rightLabel.text = self.model.TelCell;
+                    break;
+                case 3:
+                    cell.rightLabel.text = self.model.Department;
+                    break;
+                case 4:
+                    cell.rightLabel.text = self.model.Title;
+                    break;
+                case 5:
+                    cell.rightLabel.text = self.model.Email;
+                    break;
+                case 6:
+                    cell.rightLabel.text = self.model.Address;
+                    break;
+                default:
+                    break;
+            }
+        }else{
+            cell.leftLabel.text = self.leftTilteThree[indexPath.row];
+            switch (indexPath.row) {
+                case 0:
+                    cell.rightLabel.text = self.model.RealName;
+                    break;
+                case 1:
+                    cell.rightLabel.text = self.model.PSPDId;
+                    break;
+                case 2:
+                    if ([self.model.Sex isEqualToString:@"0"]) {
+                        cell.rightLabel.text = @"男";
+                    }else if ([self.model.Sex isEqualToString:@"1"]){
+                        cell.rightLabel.text = @"女";
+                    }else{
+                        cell.rightLabel.text = @"保密";
+                    }
+                    break;
+                case 3:
+                    cell.rightLabel.text = self.model.Province;
+                    break;
+                case 4:
+                    cell.rightLabel.text = self.model.City;
+                    break;
+                default:
+                    break;
+            }
+        }
+       
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+}
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    return 1;
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    switch (section) {
+        case 0:
+            return 4;
+            break;
+        case 1:
+            return 7;
+            break;
+        case 2:
+            return 5;
+            break;
+        default:
+            return 0;
+            break;
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    if (indexPath.section == 0){
+        if (indexPath.row == 0) {
+            return HeightRate(90);
+        }else{
+            return HeightRate(44);
+        }
+    }else if (indexPath.section == 1){
+        return HeightRate(44);
+    }else{
+        return HeightRate(44);
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+    if (section == 0) {
+        return TableViewHeaderNone;
+    }else{
+        return HeightRate(37);
+    }
+}
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
+    if (section > 0) {
+        UIView *view = [[UIView alloc]init];
+        view.backgroundColor = TextColor_F5F5F5;
+        UILabel *label = [[UILabel alloc]init];
+        if (section==1) {
+            label.text = @"名片信息";
+        }else if (section==2) {
+            label.text = @"其他信息";
+        }
+        label.textColor = TextColor_999999;
+        label.font = [UIFont systemFontOfSize:AdaptFont(15)];
+        [view addSubview:label];
+        
+        [label mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(WidthRate(30));
+            make.centerY.mas_equalTo(view.mas_centerY);
+            make.height.mas_equalTo(HeightRate(20));
+        }];
+        return view;
+    }else{
+        return nil;
+    }
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

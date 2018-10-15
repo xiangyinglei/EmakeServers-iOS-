@@ -1,0 +1,122 @@
+//
+//  YHUserAuditTableViewCell.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/2/1.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHUserAuditTableViewCell.h"
+#import "Header.h"
+@interface YHUserAuditTableViewCell()
+@property (nonatomic,retain)UIImageView *headImage;
+@property (nonatomic,retain)UILabel *nameLabel;
+@property (nonatomic,retain)UILabel *timelabel;
+@property (nonatomic,retain)UILabel *phoneLabel;
+@end
+@implementation YHUserAuditTableViewCell
+- (instancetype)init{
+    if (self = [super init]) {
+        
+        self.headImage = [[UIImageView alloc]init];
+        self.headImage.layer.cornerRadius = WidthRate(18.5);
+        self.headImage.clipsToBounds = YES;
+        self.headImage.contentMode = UIViewContentModeScaleAspectFill;
+        self.headImage.image = [UIImage imageNamed:@"daishenhe-36"];
+        [self.contentView addSubview:self.headImage];
+        
+        [self.headImage mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(WidthRate(15));
+            make.height.mas_equalTo(WidthRate(37));
+            make.width.mas_equalTo(WidthRate(37));
+            make.centerY.mas_equalTo(self.contentView.mas_centerY);
+        }];
+        
+        self.nameLabel = [[UILabel alloc]init];
+        self.nameLabel.font = [UIFont systemFontOfSize:AdaptFont(16)];
+        self.nameLabel.text = @"姓名";
+        [self.contentView addSubview:self.nameLabel];
+        
+        [self.nameLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(self.headImage.mas_right).offset(WidthRate(10));
+            make.top.mas_equalTo(HeightRate(15));
+            make.height.mas_equalTo(HeightRate(18));
+        }];
+        
+        self.timelabel = [[UILabel alloc]init];
+        self.timelabel.textColor = TextColor_888888;
+        self.timelabel.font = [UIFont systemFontOfSize:AdaptFont(14)];
+        self.timelabel.text = @"18/10/29";
+        [self.contentView addSubview:self.timelabel];
+        
+        [self.timelabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(self.headImage.mas_right).offset(WidthRate(10));
+            make.top.mas_equalTo(self.nameLabel.mas_bottom).offset(HeightRate(5));
+            make.height.mas_equalTo(HeightRate(15));
+        }];
+        
+        self.phoneLabel = [[UILabel alloc]init];
+        self.phoneLabel.textColor = TextColor_999999;
+        self.phoneLabel.font = [UIFont systemFontOfSize:AdaptFont(14)];
+        self.phoneLabel.text = @"17740879467";
+        [self.contentView addSubview:self.phoneLabel];
+        
+        [self.phoneLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(self.nameLabel.mas_right).offset(WidthRate(8));
+            make.centerY.mas_equalTo(self.nameLabel.mas_centerY);
+            make.height.mas_equalTo(HeightRate(17));
+        }];
+    
+        self.sendMessageBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        [self.sendMessageBtn setTitle:@"发消息" forState:UIControlStateNormal];
+        [self.sendMessageBtn setTitleColor:ColorWithHexString(APP_THEME_MAIN_COLOR) forState:UIControlStateNormal];
+        self.sendMessageBtn.titleLabel.font = SYSTEM_FONT(AdaptFont(14));
+        self.sendMessageBtn.layer.borderWidth = WidthRate(2);
+        self.sendMessageBtn.layer.borderColor = ColorWithHexString(APP_THEME_MAIN_COLOR).CGColor;
+        self.sendMessageBtn.layer.cornerRadius = WidthRate(15);
+        [self.contentView addSubview:self.sendMessageBtn];
+        
+        [self.sendMessageBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_offset(WidthRate(-18));
+            make.centerY.mas_equalTo(self.contentView.mas_centerY);
+            make.width.mas_equalTo(WidthRate(60));
+            make.height.mas_equalTo(HeightRate(30));
+        }];
+        
+        UILabel *labelLine = [[UILabel alloc]init];
+        labelLine.backgroundColor = SepratorLineColor;
+        [self.contentView addSubview:labelLine];
+        
+        [labelLine mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(0);
+            make.right.mas_equalTo(0);
+            make.bottom.mas_equalTo(0);
+            make.height.mas_equalTo(1);
+        }];
+    }
+    return self;
+}
+- (void)setData:(YHUserModel *)model{
+    
+    [self.headImage sd_setImageWithURL:[NSURL URLWithString:model.HeadImageUrl] placeholderImage:[UIImage imageNamed:@"putongyonghu-36"]];
+    if (!model.RealName||model.RealName.length<=0) {
+        self.nameLabel.text = [NSString stringWithFormat:@"用户%@",[model.MobileNumber substringFromIndex:model.MobileNumber.length-4]];
+    }else{
+        self.nameLabel.text = model.RealName;
+    }
+    self.timelabel.text = model.CreateTime;
+    NSString *phoneText = [model.MobileNumber stringByReplacingCharactersInRange:NSMakeRange(3, 4) withString:@"****"];
+    self.phoneLabel.text = phoneText;
+}
+- (void)awakeFromNib {
+    [super awakeFromNib];
+    // Initialization code
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

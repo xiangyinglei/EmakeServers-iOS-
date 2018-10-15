@@ -1,0 +1,186 @@
+//
+//  YHMQTTClient.m
+//  MQTTClientManager
+//
+//  Created by 谷伟 on 2017/9/30.
+//  Copyright © 2017年 谷伟. All rights reserved.
+//
+
+#import "YHMQTTClient.h"
+#import "chatNewModel.h"
+#import "chatBodyModel.h"
+#import "chatUserModel.h"
+#import "FMDBManager.h"
+#import "MQTTCommandModel.h"
+#import "Header.h"
+#import "YHTabBarViewController.h"
+#import "MQTTStatus.h"
+@interface YHMQTTClient()<MQTTSessionDelegate>
+@property (nonatomic,strong)NSTimer *timer;
+@property (nonatomic,copy)NSString *CMDTopic;
+@property(nonatomic, assign)    BOOL   isAutoConnect;//是否自动重连标识
+@property(nonatomic, assign)    NSUInteger connectCount;//自动重连次数
+@property(nonatomic, assign)    NSUInteger nowCount;//当前已经重连的次数
+@property(nonatomic, assign)    MQTTSessionEvent mqttStatus;//连接服务器状态
+@end
+@implementation YHMQTTClient
+
++ (YHMQTTClient *)sharedClient{
+    static YHMQTTClient *client = nil;
+    static dispatch_once_t token;
+    dispatch_once(&token, ^{
+        client = [[YHMQTTClient alloc] init];
+        client.transport = [[MQTTCFSocketTransport alloc] init];
+        client.transport.host = MQTT_IP;
+        client.transport.port = MQTT_PORT;
+        client.session = [[MQTTSession alloc] init];
+        client.session.transport = client.transport;
+        client.session.delegate = client;
+        client.session.keepAliveInterval = 60;
+        client.session.protocolLevel = MQTTProtocolVersion311;
+        client.session.cleanSessionFlag = false;
+        client.connectCount = 500;
+        client.isAutoConnect = YES;
+    });
+    return client;
+}
+
+-(void)connectToHost:(NSString *)host Port:(NSInteger)port subcriceCMDTopic:(NSString *)cmdTopic withServerId:(NSString *)serverId{
+    
+    self.session.clientId = [NSString stringWithFormat:@"customer/%@",serverId];
+    self.session.delegate = self;
+    self.CMDTopic = cmdTopic;
+    [self.session connectToHost:MQTT_IP port:MQTT_PORT usingSSL:false connectHandler:^(NSError *error){
+        if (!error) {
+            [self subcriceCMDTopic:self.CMDTopic];
+        }else{
+            
+        }
+    }];
+}
+- (void)subcriceCMDTopic:(NSString *)cmdTopic{
+    
+    [self.session subscribeToTopic:cmdTopic atLevel:MQTTQosLevelExactlyOnce subscribeHandler:^(NSError *error, NSArray<NSNumber *> *gQoss){
+        if (error) {
+            NSLog(@"Subscription cmdTopic failed %@", error.localizedDescription);
+        } else {
+            NSLog(@"Subscription cmdTopic sucessfull! Granted Qos: %@", gQoss);
+        }
+    }];
+}
+- (void)subcriceMessageTopic:(NSString *)messageTopic{
+    
+    [self.session subscribeToTopic:messageTopic atLevel:MQTTQosLevelExactlyOnce subscribeHandler:^(NSError *error, NSArray<NSNumber *> *gQoss){
+        if (error) {
+            NSLog(@"Subscription messageTopic failed %@", error.localizedDescription);
+        } else {
+            NSLog(@"Subscription messageTopic sucessfull! Granted Qos: %@", gQoss);
+        }
+    }];
+}
+
+- (void)unSubcriceMessageTopic:(NSString *)messageTopic{
+    
+    [self.session unsubscribeTopic:messageTopic unsubscribeHandler:^(NSError *error) {
+        if (error) {
+            NSLog(@"unsubscription messageTopic failed %@", error.localizedDescription);
+        } else {
+            NSLog(@"unsubscription messageTopic sucessfull! ");
+        }
+    }];
+}
+
+- (void)sendMessage:(NSDictionary *)data withTopic:(NSString *)Topic complete:(void(^)(NSError *error))completeBlock{
+    
+    NSData *JSONdata = [NSJSONSerialization dataWithJSONObject:data options:NSJSONWritingPrettyPrinted error:nil];
+    [self.session publishData:JSONdata onTopic:Topic retain:false qos:MQTTQosLevelExactlyOnce publishHandler:^(NSError *error) {
+        completeBlock(error);
+    }];
+}
+
+
+- (void)sendCommmand:(NSDictionary *)command withSelfTopic:(NSString *)selfTopic complete:(void(^)(NSError *error))completeBlock{
+    NSData *JSONdata = [NSJSONSerialization dataWithJSONObject:command options:NSJSONWritingPrettyPrinted error:nil];
+    [self.session publishData:JSONdata onTopic:selfTopic retain:false qos:MQTTQosLevelExactlyOnce publishHandler:^(NSError *error) {
+        completeBlock(error);
+    }];
+}
+
+- (void)disConnect{
+    
+    [self.session disconnect];
+}
+
+- (BOOL)isMQTTConnect{
+    if (self.mqttStatus == MQTTSessionEventConnected) {
+        return YES;
+    }
+    return false;
+}
+#pragma mark --- MQTTSessionDelegate
+- (void)newMessage:(MQTTSession *)session data:(NSData *)data onTopic:(NSString *)topic qos:(MQTTQosLevel)qos retained:(BOOL)retained mid:(unsigned int)mid{
+    
+    NSDictionary *payload = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableLeaves error:nil];
+    NSLog(@"消息-----%@",payload);
+    //指令消息
+    if ([payload objectForKey:@"MessageType"] == nil) {
+        [self.delegate onCommand:data topic:topic];
+    }else{
+        NSString *messageType = [payload objectForKey:@"MessageType"];
+        @synchronized (self) {
+            //消息响应
+            if ([messageType isEqualToString:@"Message"]) {
+                [self.delegate onMessgae:data topic:topic];
+            }
+        }
+    }
+}
+- (void)protocolError:(MQTTSession *)session error:(NSError *)error{
+    NSLog(@"消息出现错误");
+}
+- (void)handleEvent:(MQTTSession *)session event:(MQTTSessionEvent)eventCode error:(NSError *)error{
+   
+    NSDictionary *events = @{
+                             @(MQTTSessionEventConnected): @"connected",
+                             @(MQTTSessionEventConnectionRefused): @"账号或密码错误，服务器拒绝连接",
+                             @(MQTTSessionEventConnectionClosed): @"connection closed",
+                             @(MQTTSessionEventConnectionError): @"connection error",
+                             @(MQTTSessionEventProtocolError): @"protocoll error",
+                             @(MQTTSessionEventConnectionClosedByBroker): @"connection closed by broker"
+                             };
+    NSLog(@"-----------------MQTT连接状态%@-----------------",[events objectForKey:@(eventCode)]);
+    self.mqttStatus = eventCode;
+    switch (eventCode) {
+        case MQTTSessionEventConnected:
+        {
+            
+        }
+            break;
+        case MQTTSessionEventConnectionRefused:{
+            //服务器拒绝的账号密码错误直接提示
+            
+        }
+        case MQTTSessionEventConnectionClosed:{
+            
+            
+        }
+        default:{
+            //是否自动重连
+            if (self.isAutoConnect) {
+                //当前重连次数是否超过最大限制
+                if (self.nowCount<self.connectCount) {
+                    //延迟重登，避免mqtt缓冲区处理不及时崩溃
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        NSString *serviceId = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID];
+                        [self connectToHost:MQTT_IP Port:MQTT_PORT subcriceCMDTopic:self.CMDTopic withServerId:serviceId];
+                    });
+                }else{
+                }
+            }else{
+                
+            }
+        }
+            break;
+    }
+}
+@end

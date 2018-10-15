@@ -1,0 +1,449 @@
+//
+//  FMDBManager.m
+//  emake
+//
+//  Created by 谷伟 on 2017/8/31.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#import "FMDBManager.h"
+#import "FMDB.h"
+#import "Header.h"
+@interface FMDBManager()
+@property(nonatomic,strong) FMDatabaseQueue *queue;
+@end
+
+@implementation FMDBManager
++(instancetype)sharedManager{
+    
+    static FMDBManager *instance = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        instance = [[FMDBManager alloc] init];
+    });
+    return instance;
+}
+- (FMDatabaseQueue *)queue{
+    if (!_queue) {
+        //获得Documents目录路径
+        NSString *doc = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+        //拼接生成数据库路径
+        NSString *serverID = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID];
+        NSString *fileName=[NSString stringWithFormat:@"%@/%@_chat",doc,serverID];
+        //创建数据库，并加入到队列中，此时已经默认打开了数据库，无须手动打开，只需要从队列中去除数据库即可
+        self.queue = [FMDatabaseQueue databaseQueueWithPath:fileName];
+    }
+    return _queue;
+}
+-(void)initMessageChatDataWithUserID:(NSString *)userID{
+
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userID];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"CREATE TABLE IF NOT EXISTS %@(id integer PRIMARY KEY AUTOINCREMENT, sendTime text, msgType text, msgID text,msgUUID text, sender text,userId text,msg text,userName text,userPhone text, userAvata text)",filterSqlName];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        //创建表
+        BOOL createTableResult = [db executeUpdate:sqlExeString];
+        if (createTableResult){
+            NSLog(@"创建表成功");
+        }else{
+            NSLog(@"创建表失败");
+        }
+    }];
+}
+- (void)initMessageChatListData{
+    //获得Documents目录路径
+    NSString *doc = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+    //拼接生成数据库路径
+    NSString *serverID = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID];
+    NSString *fileName = [NSString stringWithFormat:@"%@/%@_chat",doc,serverID];
+    //创建数据库，并加入到队列中，此时已经默认打开了数据库，无须手动打开，只需要从队列中去除数据库即可
+    self.queue = [FMDatabaseQueue databaseQueueWithPath:fileName];
+    //打开数据库
+    [self.queue inDatabase:^(FMDatabase *db) {
+        //创建表
+        BOOL createTableResult = [db executeUpdate:@"CREATE TABLE IF NOT EXISTS UserList(id integer PRIMARY KEY AUTOINCREMENT,userId text,userName text,userPhone text, userAvata text, userType text, sendTime text, message text, messageType text, messageCount text, userInfos text)"];
+        if (createTableResult){
+            NSLog(@"创建表成功");
+        }else{
+            NSLog(@"创建表失败");
+        }
+    }];
+}
+#pragma mark - method
+- (BOOL)userChatDataIsExist:(NSString *)userId{
+    
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *existsSql = [NSString stringWithFormat:@"select count(*) as 'count' from sqlite_master where type ='table' and name = '%@'",filterSqlName];
+    __block NSInteger count = 0;
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:existsSql];
+        if ([res next]) {
+            count = [res intForColumn:@"count"];
+        }
+    }];
+    if (count == 1) {
+        return YES;
+    }else{
+        return NO;
+    }
+}
+- (BOOL)userIsExist:(NSString *)userId{
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT COUNT(userId) AS countNum FROM UserList WHERE userId = '%@'",userId];
+    __block NSInteger count = 0;
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        if ([res next]) {
+            count = [res intForColumn:@"countNum"];
+        }
+    }];
+    if (count == 1) {
+        return YES;
+    }else{
+        return NO;
+    }
+}
+- (void)updateUserMessageCount:(NSInteger)count withUserId:(NSString *)userId{
+    //确定执行语句
+    //修改“messageCount”字段
+    NSString *sql1 = [NSString stringWithFormat:@"UPDATE UserList SET %@='%@' WHERE userId = '%@'",@"messageCount",[NSString stringWithFormat:@"%ld",count],userId];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        
+        if ([db executeUpdate:sql1]) {
+            NSLog(@"更新成功!");
+        }else{
+            NSLog(@"更新失败!");
+        }
+    }];
+}
+
+- (void)updateUserInfo:(NSString *)userInfo withUserId:(NSString *)userId{
+    //确定执行语句
+    //修改“messageCount”字段
+    NSString *sql1 = [NSString stringWithFormat:@"UPDATE UserList SET %@='%@' WHERE userId = '%@'",@"userInfos",userInfo,userId];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        
+        if ([db executeUpdate:sql1]) {
+            NSLog(@"更新成功!");
+        }else{
+            NSLog(@"更新失败!");
+        }
+    }];
+}
+
+
+- (void)addUserList:(SDChatMessage *)message andUserID:(NSString *)userId andMessageCount:(NSInteger)count{
+    
+    //确定执行语句
+    if (!message.switchUserInfo || message.switchUserInfo.length<=0) {
+        message.switchUserInfo = @"";
+    }
+    NSString *sqlExeString = [NSString stringWithFormat:@"INSERT INTO UserList(userId,userName,userPhone,userAvata,userType,sendTime,message,messageType,messageCount,userInfos) VALUES('%@','%@','%@','%@','%@','%@','%@','%@','%@','%@')",userId,message.staffName,message.phoneNumber,message.staffAvata,message.staffType,message.sendTime,message.msg,message.msgType,[NSString stringWithFormat:@"%ld",count],message.switchUserInfo];
+    [self.queue inDatabase:^(FMDatabase *db){
+        [db executeUpdate:sqlExeString];
+    }];
+}
+- (NSString *)getUserInfoFromUserList:(NSString *)userId{
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM UserList where userId= '%@'",userId];
+    __block NSString *userInfoString = nil;
+    [self.queue inDatabase:^(FMDatabase *db){
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        if ([res next]) {
+            SDChatMessage *Message = [[SDChatMessage alloc] init];
+            Message.staffType = [res stringForColumn:@"userType"];
+            Message.staffAvata = [res stringForColumn:@"userAvata"];
+            Message.staffName = [res stringForColumn:@"userName"];
+            Message.phoneNumber = [res stringForColumn:@"userPhone"];
+            Message.userId = [res stringForColumn:@"userId"];
+            userInfoString = [Message mj_JSONString];
+        }
+    }];
+    return userInfoString;
+}
+
+
+- (NSString *)getAllUserInfosUserList:(NSString *)userId{
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM UserList where userId= '%@'",userId];
+    __block NSString *userInfoString = nil;
+    [self.queue inDatabase:^(FMDatabase *db){
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        if ([res next]) {
+            userInfoString = [res stringForColumn:@"userInfos"];
+        }
+    }];
+    return userInfoString;
+}
+
+
+
+- (void)addMessage:(SDChatMessage *)message andUserID:(NSString *)userId{
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"INSERT INTO %@(sendTime,msgType,msgID,msgUUID,sender,userId,msg,userName,userPhone,userAvata) VALUES('%@','%@','%@','%@','%@','%@','%@','%@','%@','%@')",filterSqlName,message.sendTime,message.msgType,message.msgID,message.messgaeUUID,message.sender,userId,message.msg,message.staffName,message.phoneNumber,message.staffAvata];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        [db executeUpdate:sqlExeString];
+    }];
+}
+
+
+
+- (void)getAllMessageWithPage:(NSInteger)page andLastMessageID:(NSInteger)lastMessageID andWithUserId:(NSString *)userId  success:(void (^)(NSArray * responseObject))success failure:(void (^)(NSString * errorObject))failure{
+    
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@ order by msgID",filterSqlName];
+    NSMutableArray *messageIdArray = [NSMutableArray arrayWithCapacity:0];
+    //当前分页10
+    for (int i=0; i<10; i++) {
+        NSInteger messagId = lastMessageID - 10*(page-1)-i;
+        [messageIdArray addObject:[NSString stringWithFormat:@"%ld",(long)messagId]];
+    }
+    __block NSMutableArray *totalArray = [[NSMutableArray alloc] init];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        while ([res next]) {
+            
+            SDChatMessage *Message = [[SDChatMessage alloc] init];
+            Message.msg = [res stringForColumn:@"msg"];
+            Message.msgID = [res stringForColumn:@"msgID"];
+            Message.messgaeUUID = [res stringForColumn:@"msgUUID"];
+            Message.sender = [res stringForColumn:@"sender"];
+            Message.sendTime = [res stringForColumn:@"sendTime"];
+            Message.msgType = [res stringForColumn:@"msgType"];
+            Message.staffAvata = [res stringForColumn:@"userAvata"];
+            Message.staffName = [res stringForColumn:@"userName"];
+            Message.phoneNumber = [res stringForColumn:@"userPhone"];
+            if ([messageIdArray containsObject:Message.msgID]) {
+                [totalArray addObject:Message];
+            }
+        }
+        if (totalArray.count>0) {
+            //冒泡排序（10个数据），大数据量不可采用
+            for (int i = 0; i < totalArray.count; i++) {
+                for (int j = 0; j < totalArray.count - 1 - i; j++) {
+                    SDChatMessage *messageOne = totalArray[j];
+                    SDChatMessage *messageTwo = totalArray[j + 1];
+                    if ([messageOne.msgID integerValue] < [messageTwo.msgID integerValue]) {
+                        SDChatMessage *tmp = totalArray[j];
+                        totalArray[j] = totalArray[j + 1];
+                        totalArray[j + 1] = tmp;
+                    }
+                }
+            }
+            success(totalArray);
+        }else{
+            failure(@"暂无更多消息");
+        }
+    }];
+}
+- (NSMutableArray *)getAllUserChatList{
+    NSMutableArray *totalArray = [[NSMutableArray alloc] initWithCapacity:0];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:@"SELECT * FROM UserList"];
+        while ([res next]) {
+            SDChatMessage *Message = [[SDChatMessage alloc] init];
+            Message.sendTime = [res stringForColumn:@"sendTime"];
+            Message.staffType = [res stringForColumn:@"userType"];
+            Message.staffAvata = [res stringForColumn:@"userAvata"];
+            Message.staffName = [res stringForColumn:@"userName"];
+            Message.phoneNumber = [res stringForColumn:@"userPhone"];
+            Message.msg = [res stringForColumn:@"message"];
+            Message.msgType = [res stringForColumn:@"messageType"];
+            Message.messageCount = [res stringForColumn:@"messageCount"];
+            Message.userId = [res stringForColumn:@"userId"];
+            Message.switchUserInfo = [res stringForColumn:@"userInfos"];
+            [totalArray addObject:Message];
+        }
+    }];
+    totalArray =(NSMutableArray *) [[totalArray reverseObjectEnumerator] allObjects];
+    return totalArray;
+}
+- (NSMutableArray *)getUserChatDataWithUserId:(NSString *)userId{
+    
+    __block NSMutableArray *totalArray = [NSMutableArray arrayWithCapacity:0];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        //确定表名称
+        NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+        //过滤‘-’字符
+        NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+        //确定执行语句
+        NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@",filterSqlName];
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        while ([res next]) {
+            SDChatMessage *Message = [[SDChatMessage alloc] init];
+            Message.msg = [res stringForColumn:@"msg"];
+            Message.msgID = [res stringForColumn:@"msgID"];
+            Message.messgaeUUID = [res stringForColumn:@"msgUUID"];
+            Message.sender = [res stringForColumn:@"sender"];
+            Message.sendTime = [res stringForColumn:@"sendTime"];
+            Message.msgType = [res stringForColumn:@"msgType"];
+            Message.staffAvata = [res stringForColumn:@"userAvata"];
+            Message.staffName = [res stringForColumn:@"userName"];
+            Message.phoneNumber = [res stringForColumn:@"userPhone"];
+            [totalArray addObject:Message];
+        }
+    }];
+    return totalArray;
+}
+- (void)deleteUserList:(NSString *)userId{
+    
+    NSString *sqlExeString = [NSString stringWithFormat:@"DELETE FROM UserList WHERE userId = '%@'",userId];
+    [self.queue inDatabase:^(FMDatabase *db){
+        [db executeUpdate:sqlExeString];
+    }];
+}
+- (NSInteger)getUserMessageCount:(NSString *)userId{
+    __block NSInteger count = 0;
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM UserList where userId= '%@'",userId];
+    [self.queue inDatabase:^(FMDatabase *db){
+        
+        FMResultSet *rs = [db executeQuery:sqlExeString];
+        if ([rs next]) {
+            count = [[rs stringForColumn:@"messageCount"] integerValue];
+        }
+    }];
+    return count;
+}
+- (NSString *)getUserLastSendTime:(NSString *)userId{
+    __block NSString *time = @"";
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM UserList where userId= '%@'",userId];
+    [self.queue inDatabase:^(FMDatabase *db){
+        
+        FMResultSet *rs = [db executeQuery:sqlExeString];
+        if ([rs next]) {
+            time = [rs stringForColumn:@"sendTime"];
+        }
+    }];
+    return time;
+}
+- (BOOL)messageIsAlreadyExist:(NSString *)userId withMessageId:(NSString *)messageId{
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@",filterSqlName];
+    __block BOOL flag = false;
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        while ([res next]) {
+            SDChatMessage *Message = [[SDChatMessage alloc] init];
+            Message.msgID = [res stringForColumn:@"msgID"];
+            if ([messageId isEqualToString:Message.msgID]) {
+                flag = true;
+                break;
+            }
+        }
+    }];
+    return flag;
+}
+- (SDChatMessage *)getMessage:(NSString *)userId withMessageId:(NSString *)messageId{
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@ where msgID= '%@'",filterSqlName,messageId];
+    __block SDChatMessage *Message = nil;
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        if ([res next]) {
+            Message = [[SDChatMessage alloc] init];
+            Message.msg = [res stringForColumn:@"msg"];
+            Message.msgID = [res stringForColumn:@"msgID"];
+            Message.messgaeUUID = [res stringForColumn:@"msgUUID"];
+            Message.sender = [res stringForColumn:@"sender"];
+            Message.sendTime = [res stringForColumn:@"sendTime"];
+            Message.msgType = [res stringForColumn:@"msgType"];
+            Message.staffAvata = [res stringForColumn:@"userAvata"];
+            Message.staffName = [res stringForColumn:@"userName"];
+            Message.phoneNumber = [res stringForColumn:@"userPhone"];
+        }
+    }];
+    return Message;
+}
+- (NSInteger)getTheMaxMessageIdWithUserId:(NSString *)userId{
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@",filterSqlName];
+    __block NSInteger maxMessageID = 0;
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        while ([res next]) {
+            NSString *messageID = [res stringForColumn:@"msgID"];
+            if ([messageID integerValue] >= maxMessageID) {
+                maxMessageID = [messageID integerValue];
+            }
+        }
+    }];
+    return maxMessageID;
+}
+- (BOOL)isNotMessageExistWithLastMessageId:(NSInteger)lastMessageId andPage:(NSInteger)page andWithUserId:(NSString *)userId{
+    //确定表名称
+    NSString *sqlName = [NSString stringWithFormat:@"UserChatList_%@",userId];
+    //过滤‘-’字符
+    NSString *filterSqlName = [sqlName stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    //确定执行语句
+    NSString *sqlExeString = [NSString stringWithFormat:@"SELECT * FROM %@ order by msgID",filterSqlName];
+    __block NSMutableArray *totalArray = [[NSMutableArray alloc] init];
+    [self.queue inDatabase:^(FMDatabase *db) {
+        FMResultSet *res = [db executeQuery:sqlExeString];
+        while ([res next]) {
+            NSString *messageID = [res stringForColumn:@"msgID"];
+            [totalArray addObject:messageID];
+        }
+    }];
+    if (lastMessageId<10) {
+        if (lastMessageId <=0) {
+            return false;
+        }
+        for (int i=0; i<lastMessageId; i++) {
+            NSInteger messagId = lastMessageId - 10*(page-1)-i;
+            NSString *messageIdString = [NSString stringWithFormat:@"%ld",(long)messagId];
+            if (![totalArray containsObject:messageIdString]) {
+                return false;
+                break;
+            }
+        }
+    }else{
+        if ((lastMessageId - (page-1)*10)<10) {
+            for (int i=0; i<(lastMessageId - (page-1)*10); i++) {
+                NSInteger messagId = lastMessageId - 10*(page-1)-i;
+                NSString *messageIdString = [NSString stringWithFormat:@"%ld",(long)messagId];
+                if (![totalArray containsObject:messageIdString]) {
+                    return false;
+                    break;
+                }
+            }
+        }else{
+            for (int i=0; i<10; i++) {
+                NSInteger messagId = lastMessageId - 10*(page-1)-i;
+                NSString *messageIdString = [NSString stringWithFormat:@"%ld",(long)messagId];
+                if (![totalArray containsObject:messageIdString]) {
+                    return false;
+                    break;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+@end

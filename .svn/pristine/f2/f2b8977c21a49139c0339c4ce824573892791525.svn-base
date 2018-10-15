@@ -1,0 +1,123 @@
+//
+//  CommonConfig.h
+//  emake
+//
+//  Created by 袁方 on 2017/7/17.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#ifndef CommonConfig_h
+#define CommonConfig_h
+
+//MQTT
+//#define MQTT_IP             @"api.emake.cn"
+#define MQTT_IP             @"git.emake.cn"
+#define MQTT_PORT           1883
+
+//友盟统计
+#define UMMobClikAPPKey      @"59f96ae28f4a9d0c05000159"
+
+
+//阿里云OSS
+#define endPoint @"oss-cn-shanghai.aliyuncs.com"
+
+
+//导航栏高度和tablebar高度
+#define TOP_BAR_HEIGHT              ScreenHeight==812?88.0f:64.0f
+#define TAB_BAR_HEIGHT              49.0f
+
+//字体
+#define SYSTEM_FONT(systemSize) [UIFont systemFontOfSize:systemSize]
+
+//角度转弧度
+#define DegreesToRadian(x) (M_PI * (x) / 180.0)
+
+//弧度转角度
+#define RadianToDegrees(radian) ((radian) * 180.0 / M_PI)
+
+//判断对象是否为空
+#define CONFIRM_NOT_NULL(x) (((x) != nil)&&(![(x) isKindOfClass:[NSNull class]]))
+
+//文件系统
+#define PathTemp NSTemporaryDirectory()
+
+#define PathDocument [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject]
+
+#define PathDocumentCache [NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES) firstObject]
+
+
+//通知
+#define NotificationAuditUserRefresh  @"NotificationAuditUserRefresh"
+#define NotificationAuditStoreRefresh  @"NotificationAuditStoreRefresh"
+#define NotificationStoreRefresh  @"NotificationStoreRefresh"
+#define NotificationUserInfoRefresh  @"NotificationUserInfoRefresh"
+
+//保留两位，不会四舍五入
+#define floorNumber(num) (floorf(num*100)/100)
+
+//字体适配
+#define SYSTEM_FONT(systemSize)                     [UIFont systemFontOfSize:systemSize]
+#define AdaptFont(actureValue)    actureValue/375.0*ScreenWidth
+
+//国际化
+#define LANGUAGE_STRING_FILENAME    @"EMakeLocalizable"
+#define NSLanguageLocalizedString(key)  \
+    NSLocalizedStringFromTable(key, LANGUAGE_STRING_FILENAME, nil)
+
+//屏幕适配
+#define ScreenWidth  [UIScreen mainScreen].bounds.size.width
+#define ScreenHeight  [UIScreen mainScreen].bounds.size.height
+#define WidthRate(actureValue)    actureValue/375.0*ScreenWidth
+#define HeightRate(actureValue)   actureValue/667.0*ScreenHeight
+
+//字体
+#define FONT_SIZE(size) ([UIFont systemFontOfSize:FontSize(size))
+
+
+//table的无header、footer
+#define TableViewHeaderNone    0.01
+#define TableViewFooterNone    0.01
+
+
+//字体适配
+#define DEFIN_FontSize(fonsize)\
+\
+static inline CGFloat FontSize(CGFloat fontSize){\
+    if (ScreenWidth==320) {\
+        return fontSize-2;\
+    }else if (ScreenWidth==375){\
+        return fontSize;\
+    }else if (ScreenWidth==812){\
+        return fontSize+3;\
+    }else{\
+        return fontSize+2;\
+    }\
+}\
+
+//OSS Type
+typedef NS_ENUM(NSInteger, OSSUploadType) {
+    image,
+    voice,
+    file
+};
+
+//存储字段
+#define LOGIN_TOKEN                             @"Emake_Token"
+#define LOGIN_REFRESHTOKEN                      @"Emake_RefreshToken"
+#define LOGIN_MOBILEPHONE                       @"MobileNumber"
+#define LOGIN_PASSWORD                          @"password"
+#define LOGIN_UUID                              @"uuid"
+#define LOGIN_USERID                            @"USERID"
+#define LOGIN_USERNAME                          @"UserName"
+#define LOGIN_UserRealName                      @"UserRealName"
+#define LOGIN_UserEmail                         @"UserEmail"
+#define LOGIN_ServiceID                         @"ServiceID"
+#define LOGIN_HeadImageUrl                      @"HeadImageUrl"
+#define LOGIN_ConsoleType                       @"ConsoleType"
+#define Is_Login                                @"Is_Login"
+#define LOGIN_TIME                              @"loginTime"
+#define LastWelcomeTime                         @"LastWelcomeTime"
+
+
+
+#endif /* CommonConfig_h */

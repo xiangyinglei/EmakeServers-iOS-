@@ -1,0 +1,93 @@
+//
+//  YHUserHeaderCell.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/1/31.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHUserHeaderCell.h"
+#import "Header.h"
+@interface YHUserHeaderCell()
+
+@end
+@implementation YHUserHeaderCell
+- (instancetype)init{
+    if (self = [super init]) {
+        self.viewOne = [self headerViewWithImageName:@"suoyouyonghu" titleName:@"所有用户" num:self.alluserNumberLable];
+        [self.contentView addSubview:self.viewOne];
+        
+        [self.viewOne mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(0);
+            make.bottom.mas_equalTo(0);
+            make.top.mas_equalTo(0);
+            make.width.mas_equalTo(ScreenWidth/2);
+        }];
+        
+        
+        self.viewTwo = [self headerViewWithImageName:@"daishenheyonghu" titleName:@"待审核合伙人" num:self.AuditNumberLable];
+        [self.contentView addSubview:self.viewTwo];
+        
+        [self.viewTwo mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(0);
+            make.bottom.mas_equalTo(0);
+            make.top.mas_equalTo(0);
+            make.width.mas_equalTo(ScreenWidth/2);
+        }];
+    }
+    return self;
+}
+- (UIView *)headerViewWithImageName:(NSString *)imageName titleName:(NSString *)title num:(UILabel *)numlable{
+    
+    UIView *view = [[UIView alloc]init];
+    UIImageView *image = [[UIImageView alloc]initWithImage:[UIImage imageNamed:imageName]];
+    image.tag = 100;
+    [view addSubview:image];
+    
+    [image mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.centerX.mas_equalTo(view.mas_centerX);
+        make.top.mas_equalTo(HeightRate(20));
+        make.width.mas_equalTo(WidthRate(76));
+        make.height.mas_equalTo(WidthRate(76));
+    }];
+    
+    UILabel *labelTitle = [[UILabel alloc]init];
+    labelTitle.text = title;
+    labelTitle.font = [UIFont systemFontOfSize:AdaptFont(15)];
+    [view addSubview:labelTitle];
+    
+    [labelTitle mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.centerX.mas_equalTo(view.mas_centerX);
+        make.top.mas_equalTo(image.mas_bottom).offset(HeightRate(15));
+        make.height.mas_equalTo(HeightRate(17));
+    }];
+
+    UILabel *labelCount = [[UILabel alloc]init];
+    labelCount.text = @"0";
+    labelCount.textColor = TextColor_999999;
+    labelCount.font = [UIFont systemFontOfSize:AdaptFont(15)];
+    [view addSubview:labelCount];
+    [labelCount mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.centerX.mas_equalTo(view.mas_centerX);
+        make.top.mas_equalTo(labelTitle.mas_bottom).offset(HeightRate(6));
+        make.height.mas_equalTo(HeightRate(14));
+    }];
+    if ([title isEqualToString:@"所有用户"]) {
+        self.alluserNumberLable = labelCount;
+    }else {
+        self.AuditNumberLable = labelCount;
+    }
+    return view;
+}
+- (void)awakeFromNib {
+    [super awakeFromNib];
+    // Initialization code
+}
+
+- (void)setSelected:(BOOL)selected animated:(BOOL)animated {
+    [super setSelected:selected animated:animated];
+
+    // Configure the view for the selected state
+}
+
+@end

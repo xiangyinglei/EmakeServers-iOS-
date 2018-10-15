@@ -1,0 +1,178 @@
+//
+//  YHAllUserMessageListViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/5/21.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHAllUserMessageListViewController.h"
+#import "Header.h"
+#import "YHFileSendMessageListTableViewCell.h"
+#import "ChatNewViewController.h"
+#import "YHFileSearchListViewController.h"
+#import "YHSendFileTipsView.h"
+@interface YHAllUserMessageListViewController ()<UISearchBarDelegate,UITableViewDataSource,UITableViewDelegate,UIScrollViewDelegate,YHSendFileTipsViewDelegete>
+@property (nonatomic,retain)UITableView *tableView;
+@property (nonatomic,retain)NSMutableArray *searchList;
+@property (nonatomic,strong)UISearchBar *search;
+@property (nonatomic,retain)NSMutableArray *chatListArray;
+@property (nonatomic,retain)SDChatMessage *msg;
+@end
+
+@implementation YHAllUserMessageListViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+    self.title = @"选择一个聊天";
+    self.view.backgroundColor = TextColor_F7F7F7;
+    [self configSubViews];
+    self.chatListArray = [[FMDBManager sharedManager] getAllUserChatList];
+    [self.tableView reloadData];
+}
+- (void)configSubViews{
+    
+    self.search = [[UISearchBar alloc]init];
+    self.search.placeholder = @"按手机号/姓名搜索";
+    self.search.delegate = self;
+    self.search.barTintColor = [UIColor whiteColor];
+    self.search.searchBarStyle = UISearchBarStyleMinimal;
+    self.search.backgroundColor = [UIColor clearColor];
+    UITextField * searchField = [self.search valueForKey:@"_searchField"];
+    [searchField setValue:TextColor_999999 forKeyPath:@"_placeholderLabel.textColor"];
+    [searchField setValue:[UIFont boldSystemFontOfSize:14] forKeyPath:@"_placeholderLabel.font"];
+    [self.view addSubview:self.search];
+    CGFloat topHeight = ScreenHeight == 812 ? 88 : 64;
+    [self.search mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(WidthRate(15));
+        make.right.mas_equalTo(WidthRate(-15));
+        make.top.mas_equalTo(HeightRate(10)+topHeight);
+        make.height.mas_equalTo(HeightRate(35));
+    }];
+    
+    UITableView *table =[[UITableView alloc]initWithFrame:CGRectZero];
+    table.delegate = self;
+    table.dataSource = self;
+    table.showsVerticalScrollIndicator = false;
+    table.showsHorizontalScrollIndicator = false;
+    table.separatorColor = [UIColor clearColor];
+    table.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:table];
+    
+    [table mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.right.mas_equalTo(0);
+        make.bottom.mas_equalTo(0);
+        make.top.mas_equalTo(self.search.mas_bottom).offset(HeightRate(10));
+    }];
+
+}
+#pragma mark ---UITableViewDataSource,UITableViewDelegate
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    YHFileSendMessageListTableViewCell *cell = nil;
+    if (!cell) {
+        cell =[[YHFileSendMessageListTableViewCell alloc]init];
+    }
+    [cell setData:self.chatListArray[indexPath.row]];
+    cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    return cell;
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    return self.chatListArray.count;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    return HeightRate(60);
+}
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    [self.view endEditing:YES];
+    self.msg = self.chatListArray[indexPath.row];
+    NSString *userName = @"";
+    if (!self.msg.staffName||self.msg.staffName.length<=0) {
+        userName = @"未录入";
+    }else{
+        userName = self.msg.staffName;
+    }
+    YHSendFileTipsView *FileTipsView = [[YHSendFileTipsView alloc] initWithDelegete:self andUserType:self.msg.staffType andUserName:userName andUserAvata:self.msg.staffAvata andFileName:self.fileName];
+    
+    [FileTipsView showAnimated];
+}
+#pragma mark ---UISearchBarDelegate
+- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar{
+    [self.view endEditing:YES];
+    self.searchList = [NSMutableArray arrayWithCapacity:0];
+    if (!searchBar.text||searchBar.text.length<=0) {
+        return;
+    }
+    NSInteger searchType = 1;
+    if ([Tools deptNumInputShouldNumber:searchBar.text]) {
+        searchType = 1;
+    }else{
+        searchType = 0;
+    }
+    [[YHJsonRequest shared] searchUserWithMoblieNumber:searchBar.text andSearchType:searchType SucceededBlock:^(YHUserMainModel *model) {
+        if (model.UserRows.count>0) {
+            for (NSDictionary *dict in model.UserRows) {
+                YHUserModel *model = [YHUserModel mj_objectWithKeyValues:dict];
+                SDChatMessage *Chatmodel = [[SDChatMessage alloc]init];
+                Chatmodel.staffType = model.UserType;
+                Chatmodel.staffName = model.RealName;
+                Chatmodel.staffAvata = model.HeadImageUrl;
+                Chatmodel.userId = model.UserId;
+                Chatmodel.phoneNumber = model.MobileNumber;
+                [self.searchList addObject:Chatmodel];
+            }
+        }
+        YHFileSearchListViewController *vc = [[YHFileSearchListViewController alloc]init];
+        vc.modelList = self.searchList;
+        vc.fileName = self.fileName;
+        vc.filePath = self.filePath;
+        vc.fileData = self.fileData;
+        [self.navigationController pushViewController:vc animated:YES];
+    } failedBlock:^(NSString *errorMessage) {
+        [self.view makeToast:errorMessage duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+#pragma mark ---- YHSendFileTipsViewDelegete
+- (void)alertViewLeftBtnClick:(id)alertView{
+    
+}
+- (void)alertViewRightBtnClick:(id)alertView{
+    UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+    ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+    vc.hidesBottomBarWhenPushed = YES;
+    NSString *userName = @"";
+    if (!self.msg.staffName||self.msg.staffName.length<=0) {
+        userName = @"未录入";
+    }else{
+        userName = self.msg.staffName;
+    }
+    vc.userName = userName;
+    vc.listID = self.msg.userId;
+    vc.userAvatar = self.msg.staffAvata;
+    vc.userType = self.msg.staffType;
+    vc.phoneNumber = self.msg.phoneNumber;
+    vc.isUploadFile = YES;
+    vc.filePath = self.filePath;
+    vc.fileName = self.fileName;
+    vc.fileData = self.fileData;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

@@ -1,0 +1,241 @@
+//
+//  YHMessageListViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/1/31.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHMessageListViewController.h"
+#import "YHLoginViewController.h"
+#import "Header.h"
+#import "YHMessageListTableViewCell.h"
+#import "ChatNewViewController.h"
+#import "MQTTCommandModel.h"
+#import "YHMessageListResponseCell.h"
+@interface YHMessageListViewController ()<UITableViewDataSource,UITableViewDelegate>
+
+@end
+
+@implementation YHMessageListViewController
+- (void)viewWillAppear:(BOOL)animated{
+    [super viewWillAppear:animated];
+    [self getuserData];
+    [self refresh];
+}
+
+- (void)viewDidLoad {
+    
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+    self.title = @"消息";
+    self.navigationItem.leftBarButtonItem = nil;
+    self.view.backgroundColor = TextColor_F7F7F7;
+    [self IsLoginOrNot];
+    [self configSubviews];
+    self.chatListArray = [[FMDBManager sharedManager] getAllUserChatList];
+    [self.tableView reloadData];
+}
+- (void)refresh{
+    NSMutableArray *responseArray = [NSMutableArray arrayWithCapacity:0];
+    for (SDChatMessage *msg in self.chatListArray) {
+        if (msg.isResponseMessage) {
+            [responseArray addObject:msg];
+        }
+    }
+    NSArray *chatListArray = [[FMDBManager sharedManager] getAllUserChatList];
+    [responseArray addObjectsFromArray:chatListArray];
+    self.chatListArray = responseArray;
+    [self.tableView reloadData];
+}
+- (void)configSubviews{
+    
+    self.tableView = [[UITableView alloc]initWithFrame:CGRectZero style:UITableViewStylePlain];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.showsVerticalScrollIndicator = false;
+    self.tableView.showsHorizontalScrollIndicator = false;
+    self.tableView.separatorColor = [UIColor clearColor];
+    self.tableView.backgroundColor = [UIColor clearColor];
+    [self.view addSubview:self.tableView];
+    
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.bottom.mas_equalTo(-TAB_BAR_HEIGHT);
+        make.right.mas_equalTo(0);
+    }];
+}
+- (void)IsLoginOrNot{
+    
+    BOOL isValide =  [NSDate isValideTimeDifferenceWithLastLoginTime:[[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_TIME] currentLoginTime:[NSDate getCurrentTime] ValidTime:LOGIN_VALID];
+    if (isValide == NO) {
+        YHLoginViewController *loginViewController = [[YHLoginViewController alloc] init];
+        loginViewController.navigationController.navigationBarHidden = YES;
+        loginViewController.hidesBottomBarWhenPushed =YES;
+        [self.navigationController pushViewController:loginViewController animated:NO];
+    }
+}
+-(void)getuserData{
+    
+    UITabBarItem *firstItem = self.tabBarController.tabBar.items[1];
+    [[YHJsonRequest shared] getAllUsersNumberSuccessBlock:^(NSDictionary *successMessage) {
+        if (successMessage.count>0) {
+            if ([successMessage objectForKey:@"AuditUserNum"]) {
+                NSNumber *AuditUserNum = successMessage[@"AuditUserNum"];
+                if (AuditUserNum.integerValue >0) {
+                    firstItem.badgeCenterOffset = CGPointMake(0, 0);
+                    [firstItem showBadgeWithStyle:WBadgeStyleRedDot value:0 animationType:WBadgeAnimTypeNone];
+                }else{
+                    [firstItem clearBadge];
+                }
+            }else{
+                [firstItem clearBadge];
+            }
+        }
+    } fialureBlock:^(NSString *errorMessages) {
+        
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+#pragma mark ---UITableViewDataSource,UITableViewDelegate
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    SDChatMessage *message = self.chatListArray[indexPath.row];
+    if (message.isResponseMessage) {
+        YHMessageListResponseCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMessageListResponseCell alloc]init];
+        }
+        if (message.isSwitchResponseMessage) {
+            cell.switchLabel.hidden = false;
+            cell.switchLabel.text = [NSString stringWithFormat:@"由客服:%@转接",message.switchCustomerServers];
+        }else{
+            cell.switchLabel.hidden = true;
+        }
+        cell.responseBlock = ^(SDChatMessage *msg) {
+            NSString *topic = [NSString stringWithFormat:@"chatroom/%@",msg.userId];
+            [[YHMQTTClient sharedClient] subcriceMessageTopic:topic];
+            msg.isResponseMessage = false;
+            NSMutableArray *changeArray = [NSMutableArray arrayWithArray:self.chatListArray];
+            for (int i = 0; i <self.chatListArray.count; i++) {
+                SDChatMessage *model = self.chatListArray[i];
+                if ([model.userId isEqualToString:msg.userId]) {
+                    [changeArray removeObject:model];
+                }
+            }
+            if (changeArray.count <=0) {
+                [changeArray addObject:msg];
+            }else{
+                for (int i = 0; i <self.chatListArray.count; i++) {
+                    SDChatMessage *Message = self.chatListArray[i];
+                    if (!Message.isResponseMessage) {
+                        [changeArray insertObject:msg atIndex:i];
+                        break;
+                    }
+                }
+            }
+            NSMutableArray *arrayList = [NSMutableArray arrayWithCapacity:0];
+            NSMutableArray *arrayResponse = [NSMutableArray arrayWithCapacity:0];
+            for (SDChatMessage *message in changeArray) {
+                if (message.isResponseMessage) {
+                    [arrayResponse addObject:message];
+                }else{
+                    [arrayList addObject:message];
+                }
+            };
+            [arrayResponse addObjectsFromArray:arrayList];
+            self.chatListArray = arrayResponse;
+            [self.tableView reloadData];
+            if ([[FMDBManager sharedManager] userIsExist:msg.userId]) {
+                
+                [[FMDBManager sharedManager] deleteUserList:msg.userId];
+                
+                [[FMDBManager sharedManager] addUserList:msg andUserID:msg.userId andMessageCount:1];
+            
+            }else{
+                [[FMDBManager sharedManager] addUserList:msg andUserID:msg.userId andMessageCount:1];
+            }
+            
+            UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+            ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+            vc.hidesBottomBarWhenPushed = YES;
+            vc.userId = msg.userId;
+            vc.userAvatar = msg.staffAvata;
+            vc.userType = msg.staffType;
+            if (!msg.staffName||msg.staffName.length<=0) {
+                vc.userName = @"未录入";
+            }else{
+                vc.userName = msg.staffName;
+            }
+            vc.phoneNumber = msg.phoneNumber;
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [cell setData:self.chatListArray[indexPath.row]];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }else{
+        YHMessageListTableViewCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMessageListTableViewCell alloc]init];
+        }
+        [cell setData:self.chatListArray[indexPath.row]];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+    
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    return self.chatListArray.count;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    return HeightRate(65);
+}
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    SDChatMessage *msg = self.chatListArray[indexPath.row];
+    if (!msg.isResponseMessage) {
+        UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+        ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+        vc.hidesBottomBarWhenPushed = YES;
+        
+        vc.userId = msg.userId;
+        vc.userAvatar = msg.staffAvata;
+        vc.userType = msg.staffType;
+        if (!msg.staffName||msg.staffName.length<=0) {
+            vc.userName = @"未录入";
+        }else{
+            vc.userName = msg.staffName;
+        }
+        vc.phoneNumber = msg.phoneNumber;
+        [self.navigationController pushViewController:vc animated:YES];
+    }
+    
+}
+
+
+//- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath{
+//    return UITableViewCellEditingStyleDelete;
+//}
+//- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath{
+//    SDChatMessage *msg = self.chatListArray[indexPath.row];
+//    [self clearFMDBDataWithUserId:msg.userId];
+//}
+//- (void)clearFMDBDataWithUserId:(NSString *)userId{
+//    [[FMDBManager sharedManager] deleteUserList:userId];
+//}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+@end

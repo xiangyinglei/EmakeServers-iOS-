@@ -1,0 +1,217 @@
+//
+//  YHMessageListViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/1/31.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHMessageListViewController.h"
+#import "YHLoginViewController.h"
+#import "Header.h"
+#import "YHMessageListTableViewCell.h"
+#import "ChatNewViewController.h"
+#import "MQTTCommandModel.h"
+#import "YHMessageListResponseCell.h"
+@interface YHMessageListViewController ()<UITableViewDataSource,UITableViewDelegate>
+@end
+
+@implementation YHMessageListViewController
+- (void)viewWillAppear:(BOOL)animated{
+    [super viewWillAppear:animated];
+    [self getStoreDataWithRequestType:1];
+    self.chatListArray = [[FMDBManager sharedManager] getAllUserChatList];
+    [self.tableView reloadData];
+}
+- (void)refreshInterface{
+    
+}
+- (void)viewDidLoad {
+    
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+    self.title = @"消息";
+    self.navigationItem.leftBarButtonItem = nil;
+    self.view.backgroundColor = TextColor_F7F7F7;
+    [self IsLoginOrNot];
+    [self configSubviews];
+}
+- (void)configSubviews{
+    
+    self.tableView = [[UITableView alloc]initWithFrame:CGRectZero style:UITableViewStyleGrouped];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.showsVerticalScrollIndicator = false;
+    self.tableView.showsHorizontalScrollIndicator = false;
+    self.tableView.separatorColor = [UIColor clearColor];
+    self.tableView.backgroundColor = [UIColor clearColor];
+    self.tableView.estimatedSectionFooterHeight = 0;
+    self.tableView.estimatedSectionHeaderHeight = 0;
+    [self.view addSubview:self.tableView];
+    
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.bottom.mas_equalTo(-TAB_BAR_HEIGHT);
+        make.right.mas_equalTo(0);
+    }];
+}
+- (void)IsLoginOrNot{
+    if ([[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_TOKEN] == nil) {
+        YHLoginViewController *loginViewController = [[YHLoginViewController alloc] init];
+        loginViewController.navigationController.navigationBarHidden = YES;
+        loginViewController.hidesBottomBarWhenPushed = YES;
+        [self.navigationController pushViewController:loginViewController animated:NO];
+    }
+}
+- (void)getStoreDataWithRequestType:(NSInteger)type{
+    [[YHJsonRequest shared] getAppCustomerPlatformDataWithRequestType:type SuccessBlock:^(NSDictionary *dict) {
+        UITabBarItem *firstItem = self.tabBarController.tabBar.items[1];
+        if ([dict objectForKey:@"AuditUserNum"]) {
+            NSNumber *AuditUserNum = dict[@"AuditUserNum"];
+            if (AuditUserNum.integerValue >0) {
+                firstItem.badgeCenterOffset = CGPointMake(0, 0);
+                [firstItem showBadgeWithStyle:WBadgeStyleRedDot value:0 animationType:WBadgeAnimTypeNone];
+            }else{
+                [firstItem clearBadge];
+            }
+        }else{
+            [firstItem clearBadge];
+        }
+    } fialureBlock:^(NSString *errorMessages) {
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+#pragma mark ---UITableViewDataSource,UITableViewDelegate
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    return 2;
+}
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.section == 0) {
+        YHMessageListResponseCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMessageListResponseCell alloc]init];
+        }
+        SDChatMessage *message = self.responseArray[indexPath.row];
+        if (message.switchCustomerServers.length <=0 || !message.switchCustomerServers) {
+        }else{
+            cell.switchLabel.text = [NSString stringWithFormat:@"由客服:%@转接",message.switchCustomerServers];
+        }
+        cell.responseBlock = ^(SDChatMessage *msg) {
+            NSString *topic;
+            if ([msg.userId containsString:@"_"]) {
+                NSArray *array = [msg.userId componentsSeparatedByString:@"_"];
+                topic = [NSString stringWithFormat:@"chatroom/%@/%@",array[0],array[1]];
+                //接入变成群聊,改成群头像，昵称暂时不改
+            }else{
+                topic = [NSString stringWithFormat:@"chatroom/%@",msg.userId];
+            }
+            [[YHMQTTClient sharedClient] subcriceMessageTopic:topic];
+            [self.responseArray removeObject:msg];
+            [self.chatListArray addObject:msg];
+            [self.tableView reloadData];
+            if ([[FMDBManager sharedManager] userIsExist:msg.userId]) {
+                [[FMDBManager sharedManager] deleteUserList:msg.userId];
+                [[FMDBManager sharedManager] addUserList:msg andUserID:msg.userId andMessageCount:0];
+            }else{
+                [[FMDBManager sharedManager] addUserList:msg andUserID:msg.userId andMessageCount:0];
+            }
+            UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+            ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+            vc.hidesBottomBarWhenPushed = YES;
+            vc.listID = msg.userId;
+            vc.userAvatar = msg.staffAvata;
+            vc.userType = msg.staffType;
+            if (!msg.staffName||msg.staffName.length<=0) {
+                vc.userName = @"未录入";
+            }else{
+                vc.userName = msg.staffName;
+            }
+            vc.phoneNumber = msg.phoneNumber;
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [cell setData:self.responseArray[indexPath.row]];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }else{
+        YHMessageListTableViewCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMessageListTableViewCell alloc]init];
+        }
+        [cell setData:self.chatListArray[indexPath.row]];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    if (section == 0) {
+        return self.responseArray.count;
+    }else{
+        return self.chatListArray.count;
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.section == 0) {
+        SDChatMessage *message = self.responseArray[indexPath.row];
+        if (message.switchCustomerServers.length <=0 || !message.switchCustomerServers) {
+            return HeightRate(65);
+        }else{
+            return HeightRate(75);
+        }
+    }else{
+        return HeightRate(65);
+    }
+}
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.section == 1) {
+        SDChatMessage *msg = self.chatListArray[indexPath.row];
+        UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+        ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+        vc.hidesBottomBarWhenPushed = YES;
+        vc.listID = msg.userId;
+        vc.userAvatar = msg.staffAvata;
+        vc.userType = msg.staffType;
+        if (!msg.staffName||msg.staffName.length<=0) {
+            vc.userName = @"未录入";
+        }else{
+            vc.userName = msg.staffName;
+        }
+        vc.phoneNumber = msg.phoneNumber;
+        [self.navigationController pushViewController:vc animated:YES];
+    }
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+    if (section == 0) {
+        return TableViewHeaderNone;
+    }else{
+        return HeightRate(5);
+    }
+}
+
+- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath{
+    return UITableViewCellEditingStyleDelete;
+}
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)editingStyle forRowAtIndexPath:(NSIndexPath *)indexPath{
+    SDChatMessage *msg = self.chatListArray[indexPath.row];
+    [self clearFMDBDataWithUserId:msg.userId];
+}
+- (void)clearFMDBDataWithUserId:(NSString *)userId{
+    [[FMDBManager sharedManager] deleteUserList:userId];
+    self.chatListArray = [[FMDBManager sharedManager] getAllUserChatList];
+    [self.tableView reloadData];
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+@end

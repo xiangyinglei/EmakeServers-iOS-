@@ -1,0 +1,37 @@
+PODS:
+  - Masonry (1.1.0)
+  - MQTTClient (0.10.2):
+    - MQTTClient/Core (= 0.10.2)
+  - MQTTClient/Core (0.10.2):
+    - MQTTClient/Manager
+    - MQTTClient/Min
+  - MQTTClient/Manager (0.10.2):
+    - MQTTClient/Min
+  - MQTTClient/Min (0.10.2)
+  - SDWebImage (4.2.3):
+    - SDWebImage/Core (= 4.2.3)
+  - SDWebImage/Core (4.2.3)
+  - SKFPicPreview (1.2.1):
+    - SDWebImage
+
+DEPENDENCIES:
+  - Masonry
+  - MQTTClient
+  - SKFPicPreview
+
+SPEC REPOS:
+  https://github.com/cocoapods/specs.git:
+    - Masonry
+    - MQTTClient
+    - SDWebImage
+    - SKFPicPreview
+
+SPEC CHECKSUMS:
+  Masonry: 678fab65091a9290e40e2832a55e7ab731aad201
+  MQTTClient: e8d3d642f28548296511b3af4e2cef12874071ce
+  SDWebImage: 791bb72962b3492327ddcac4b1880bd1b5458431
+  SKFPicPreview: e142e5ce79b55e10587455431c7ca6d951e64b8a
+
+PODFILE CHECKSUM: 6b6aa32338f2505a814769c1c651737c19e8253c
+
+COCOAPODS: 1.5.3

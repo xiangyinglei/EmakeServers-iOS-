@@ -1,0 +1,587 @@
+//
+//  YHJsonRequest.m
+//  emake
+//
+//  Created by chenyi on 2017/8/7.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+#import "YHJsonRequest.h"
+#import "Header.h"
+#import "YHAFNetWorkingRequset.h"
+#import "productModel.h"
+#import "YHOrderModel.h"
+#import "YHLoginViewController.h"
+#import "YHMQTTClient.h"
+@implementation YHJsonRequest
+- (NSLock *)lock{
+    if (!_lock) {
+        self.lock = [[NSLock alloc] init];
+    }
+    return _lock;
+}
+- (NSLock *)tokenLock{
+    if (!_tokenLock) {
+        self.tokenLock = [[NSLock alloc] init];
+    }
+    return _tokenLock;
+}
+DEFINE_SINGLETON_FOR_CLASS(YHJsonRequest);
+//错误信息处理
+- (NSString *)dealWithError:(NSInteger)code{
+    switch (code){
+        case 401:
+            //过期
+            [self performSelector:@selector(RefreshToken) withObject:nil afterDelay:1];
+        case 403:
+            [self performSelector:@selector(loginRefresh) withObject:nil afterDelay:1];
+            return @"登录已过期";
+        case 404:
+            return @"请求路径错误";
+        break;
+        case 500:
+            return @"服务端异常";
+        break;
+        case 502:
+            return @"服务端异常";
+        break;
+        default:
+            return @"网络异常，请检查网络";
+    }
+}
+- (void)loginRefresh{
+    
+    [self.lock lock];
+    //断开连接
+    [[YHMQTTClient sharedClient] disConnect];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:LOGIN_TOKEN];
+    [[NSUserDefaults standardUserDefaults] synchronize];
+    BOOL flag = false;
+    if (flag == false){
+        YHLoginViewController *loginVC = [[YHLoginViewController alloc] init];
+        UINavigationController *nav = [Tools currentNavigationController];
+        loginVC.hidesBottomBarWhenPushed = YES;
+        [nav pushViewController:loginVC animated:YES];
+        flag = true;
+    }else{
+        return;
+    }
+    [self.lock unlock];
+}
+- (void)RefreshToken{
+    [self.tokenLock lock];
+    //断开连接
+    BOOL flag = false;
+    if (flag == false){
+        NSString *refresh_token = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_REFRESHTOKEN];
+        [[NSUserDefaults standardUserDefaults] setObject:LOGIN_TOKEN forKey:refresh_token];
+        [[NSUserDefaults standardUserDefaults] synchronize];
+        [self RefreshTokenRequest];
+        flag = true;
+    }else{
+        return;
+    }
+    [self.tokenLock unlock];
+}
+- (void)RefreshTokenRequest{
+    NSString *refresh_token = [[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_REFRESHTOKEN];
+    NSString *URL = [NSString stringWithFormat:@"%@?refresh_token=%@",URL_AccessToken,refresh_token];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSString *Access_token = [data objectForKey:@"Access_token"];
+                    NSString *Refresh_token = [data objectForKey:@"Refresh_token"];
+                    [[NSUserDefaults standardUserDefaults] setObject:Access_token forKey:LOGIN_TOKEN];
+                    [[NSUserDefaults standardUserDefaults] setObject:Refresh_token forKey:LOGIN_REFRESHTOKEN];
+                    [[NSUserDefaults standardUserDefaults] synchronize];
+                }else{
+                    
+                }
+            }
+        }else{
+        }
+    }];
+}
+//登录
+-(void)loginWithPassword: (NSString *) Password UserName:(NSString *) userName
+           succeededBlock:(void (^)(NSDictionary *loginDict))succeededBlock
+              failedBlock:(void (^)(NSString *errorMessage))failedBlock{
+    NSString *MD5String = [Tools MD5:Password];
+    NSDictionary *parameters = @{@"UserName":userName,@"Password":MD5String,@"client_id":@"emake_customer"};
+    [[YHAFNetWorkingRequset sharedRequset] request:POST urlString:URL_ConsoleUserLogin parameters:parameters finished:^(NSDictionary *result, NSError *error) {
+            if (!error) {
+                if (CONFIRM_NOT_NULL(result)){
+                    NSNumber *flag = [result objectForKey:RESPONSE_RESULT_CODE];
+                    if ([flag intValue] == 0){
+                        NSDictionary *data = [result objectForKey:RESPONSE_RESULT_DATA];
+                        succeededBlock(data);
+                    }else{
+                        NSString *failStr = [NSString stringWithFormat:@"%@%@",[result objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                        failedBlock(failStr);
+                    }
+                }
+            }else{
+                failedBlock([self dealWithError:error.code]);
+            }
+    }];
+    
+}
+- (void)searchUserWithMoblieNumberWithParameter:(NSDictionary *)params SucceededBlock:(void (^)(YHUserMainModel *model))succeededBlock failedBlock:(void (^)(NSString *errorMessage))failedBlock{
+    //搜索
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL_CustomerUserSearch parameters:params finished:^(NSDictionary * result, NSError *error) {
+        if (!error) {
+            if (CONFIRM_NOT_NULL(result))
+            {
+                NSNumber *flag = [result objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [result objectForKey:RESPONSE_RESULT_DATA];
+                    YHUserMainModel *model = [YHUserMainModel mj_objectWithKeyValues:data];
+                    succeededBlock(model);
+                }else{
+                    NSString *failStr = [NSString stringWithFormat:@"%@%@",[result objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                    failedBlock(failStr);
+                }
+            }
+        }else{
+            failedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//获取用户信息
+- (void)getUsersInfoWithUserId:(NSString *)userId SucceededBlock:(void (^)(YHUserModel *model))succeededBlock failedBlock:(void (^)(NSString *errorMessage))failedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?UserId=%@",URL_CustomerUserQuery,userId];
+    [[YHAFNetWorkingRequset sharedRequset] GET:URL parameters:nil finished:^(NSDictionary * responseObject, NSError *error) {
+        if (!error) {
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    YHUserModel *model = [YHUserModel mj_objectWithKeyValues:data];
+                    succeededBlock(model);
+                }else{
+                    NSString *failStr = [NSString stringWithFormat:@"%@%@",[responseObject objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                    failedBlock(failStr);
+                }
+            }
+        }else{
+            failedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+- (void)getShoppingGoodCategoriesSeriesId:(NSString *)SeriesId SuccessBlock:(void(^)(NSDictionary *successMessage))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *url = [NSString stringWithFormat:@"%@?SeriesId=%@",URL_ShoppingGoodCategories,SeriesId];
+    [[YHAFNetWorkingRequset sharedRequset] GET:url parameters:nil finished:^(NSDictionary * responseObject, NSError *error) {
+        if (!error) {
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    if ([data isKindOfClass:[NSNull class]]) {
+                        filaedBlock(@"暂无商品");
+                    }else{
+                        successBLock(data);
+                    }
+                    
+                }else{
+                    NSString *failStr = [NSString stringWithFormat:@"%@%@",[responseObject objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                    filaedBlock(failStr);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+- (void)getProductDetailsInfoWith:(NSString *)CategoryId seriesCode:(NSString *)seriesCode successBlock:(void(^)(YHProductDetailModel *model))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *Url = [NSString stringWithFormat:@"%@?CategoryId=%@&GoodsSeriesCode=%@",URL_ShoppingDetail,CategoryId,seriesCode];
+    [[YHAFNetWorkingRequset sharedRequset] GET:Url parameters:nil finished:^(NSDictionary * responseObject, NSError *error) {
+        if (!error) {
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    YHProductDetailModel *model = [YHProductDetailModel mj_objectWithKeyValues:data];
+                    successBLock(model);
+                }else{
+                    NSString *failStr = [NSString stringWithFormat:@"%@%@",[responseObject objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                    filaedBlock(failStr);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+- (void)getQuickReplySuccessBlock:(void(^)(NSArray *array))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    [[YHAFNetWorkingRequset sharedRequset] GET:URL_AppQuickReplay parameters:nil finished:^(NSDictionary * responseObject, NSError *error) {
+        if (!error) {
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHReplyModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    NSString *failStr = [NSString stringWithFormat:@"%@%@",[responseObject objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                    filaedBlock(failStr);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+- (void)getWebContractWithContractNo:(NSString *)contractNo successBlock:(void(^)(NSDictionary *dict))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?ContractNo=%@",URL_WebMakeContractChat,contractNo];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0)
+                {
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    successBLock(data);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//关联订单
+- (void)getOrderListWithUserId:(NSString *)userId orStoreId:(NSString *)storeId SuccessBlock:(void(^)(NSArray *dataArray))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    
+    NSString *url;
+    if (storeId != nil){
+        url = [NSString stringWithFormat:@"%@?StoreId=%@&RequestType=1",URL_AppCustomerMakeOrder,storeId];
+    }else{
+        url = [NSString stringWithFormat:@"%@?userId=%@&RequestType=1",URL_AppCustomerMakeOrder,userId];
+    }
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:url parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHOrderModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//聊天记录归档
+- (void)appChatPostToServers:(NSDictionary *)dict SuccessBlock:(void(^)(NSString *successMessages))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    
+    [[YHAFNetWorkingRequset sharedRequset] request:POST urlString:URL_AppChatOrder parameters:dict finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject))
+            {
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    successBLock(@"归档成功");
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//聊天记录归档信息查看
+- (void)getAppChatFromServers:(NSString *)params SuccessBlock:(void(^)(NSArray *messageArray))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?%@",URL_AppChatOrder,params];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHArchiveModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//店铺信息平台
+- (void)getAppCustomerPlatformDataWithRequestType:(NSInteger)RequestType SuccessBlock:(void(^)(NSDictionary *dict))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?RequestType=%ld",URL_AppCustomerPlatform,(long)RequestType];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    successBLock(data);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//上线店铺
+- (void)getAppCustomerAllStoreWithPageIndex:(NSInteger)PageIndex andPageSize:(NSInteger)PageSize SuccessBlock:(void(^)(NSArray *messageArray))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?StoreState=1&PageIndex=%ld&PageSize=%ld",URL_AppCustomerAll_Store,(long)PageIndex,(long)PageSize];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHStoreModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//待审核店铺
+- (void)getAppCustomerAuditStoreWithPageIndex:(NSInteger)PageIndex andPageSize:(NSInteger)PageSize SuccessBlock:(void(^)(NSArray *messageArray))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?StoreState=0&PageIndex=%ld&PageSize=%ld",URL_AppCustomerAll_Store,(long)PageIndex,(long)PageSize];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHStoreModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//所有用户
+- (void)getAppCustomerAllUserWithUserIdentity:(NSString *)userIdentity PageIndex:(NSInteger)PageIndex andPageSize:(NSInteger)PageSize SuccessBlock:(void(^)(NSDictionary *dict))successBlock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?UserIdentity=%@&PageIndex=%ld&PageSize=%ld",URL_AppCustomerAll_User,userIdentity,(long)PageIndex,(long)PageSize];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    successBlock(data);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//店铺资料
+- (void)getAppCustomerStoreDetailWithStoreId:(NSString *)storeId SuccessBlock:(void(^)(YHStoreModel *model))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?StoreId=%@",URL_AppCustomerStoreDetail,storeId];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    YHStoreModel *model = [YHStoreModel mj_objectWithKeyValues:data];
+                    successBLock(model);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//店铺审核
+- (void)auditAppCustomerStoreWithParams:(NSDictionary *)parameters SuccessBlock:(void(^)(NSString *successMessages))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    [[YHAFNetWorkingRequset sharedRequset] request:PUT urlString:URL_AppCustomerStoreDetail parameters:parameters finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSString *info = [responseObject objectForKey:RESPONSE_RESULT_INFO];
+                    successBLock(info);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//店铺搜索
+- (void)searchAppCustomerStoreWithSearchText:(NSString *)searchText SuccessBlock:(void(^)(NSArray *messageArray))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *search = [searchText stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    NSString *URL = [NSString stringWithFormat:@"%@?StoreState=1&PageIndex=1&PageSize=10000&SearchContent=%@",URL_AppCustomerAll_Store,search];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    NSArray *array = [YHStoreModel mj_objectArrayWithKeyValuesArray:data];
+                    successBLock(array);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//店铺下架
+- (void)storeDownWithParameters:(NSDictionary *)params SuccessBlock:(void(^)(NSString *successMessage))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    [[YHAFNetWorkingRequset sharedRequset] request:POST urlString:URL_ConsoleStore parameters:params finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSString *info = [responseObject objectForKey:RESPONSE_RESULT_INFO];
+                    successBLock(info);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+
+//订单查询
+-(void)userUseOrderManageParams:(NSDictionary *)params SucceededBlock:(void (^)(NSArray *orderArray))succeededBlock failedBlock:(void (^)(NSString *errorMessage))failedBlock
+{
+    
+    if ([[YHAFNetWorkingRequset sharedRequset] isNetworkAvailable]) {
+        
+        [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL_StoreContractOder parameters:params finished:^(id result, NSError *error) {
+            
+            if (!error) {
+                if (CONFIRM_NOT_NULL(result))
+                {
+                    NSNumber *flag = [result objectForKey:RESPONSE_RESULT_CODE];
+                    if ([flag intValue] == 0){
+                        NSArray *dataArr = [result objectForKey:RESPONSE_RESULT_DATA];
+                        //                        NSArray *keyS = data[@"index"];
+                        NSMutableArray *ModelArray = [NSMutableArray array];
+                        for (NSDictionary *contractDic in dataArr) {
+                            //
+                            YHOrderContract *contract = [YHOrderContract mj_objectWithKeyValues:contractDic];
+                           
+                            NSMutableArray *goods = [NSMutableArray array];
+                            for (NSDictionary *goodDic in contract.ProductList) {
+                                YHOrder *order = [YHOrder mj_objectWithKeyValues:goodDic];
+
+                                NSArray *addsevice = [YHOrderAddSevice mj_objectArrayWithKeyValuesArray:order.AddServiceInfo];
+                                order.AddServiceArr = addsevice;
+                                [goods addObject:order];
+                            }
+                            NSArray *shipInfo = [YHOrderShippingInfo mj_objectArrayWithKeyValuesArray:contract.ShippingInfo];
+                            
+                            contract.goodsModelArr = goods;
+                            contract.shipingModelArr = shipInfo;
+                            [ModelArray addObject:contract];
+                        }
+                        succeededBlock(ModelArray);
+                    }else{
+                        NSString *failStr = [NSString stringWithFormat:@"%@%@",[result objectForKey:RESPONSE_RESULT_INFO],Tips_RESULT_INFO];
+                        failedBlock(failStr);
+                    }
+                }
+            }else{
+                failedBlock([self dealWithError:error.code]);
+            }
+        }];
+    }else{
+        failedBlock(@"网络异常，请检查网络");
+    }
+}
+//城市代理人
+- (void)getAppCityDelegateUserWithAgentState:(NSString *)AgentState PageIndex:(NSInteger)PageIndex andPageSize:(NSInteger)PageSize SuccessBlock:(void(^)(NSDictionary *dict))successBlock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    NSString *URL = [NSString stringWithFormat:@"%@?AgentState=%@&PageIndex=%ld&PageSize=%ld",URL_AppCustomerAgentUnaudit,AgentState,(long)PageIndex,(long)PageSize];
+    [[YHAFNetWorkingRequset sharedRequset] request:GET urlString:URL parameters:nil finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSDictionary *data = [responseObject objectForKey:RESPONSE_RESULT_DATA];
+                    successBlock(data);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//城市代理人审核
+- (void)auditCityDelegateUserWithParams:(NSDictionary *)parameters SuccessBlock:(void(^)(NSString *successMessages))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    [[YHAFNetWorkingRequset sharedRequset] request:POST urlString:URL_AppCustomerAgentAudit parameters:parameters finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSString *info = [responseObject objectForKey:RESPONSE_RESULT_INFO];
+                    successBLock(info);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+//修改代理商资料
+- (void)auditCityDelegateUserCategoryExchangeWithParams:(NSDictionary *)parameters SuccessBlock:(void(^)(NSString *successMessages))successBLock fialureBlock:(void(^)(NSString *errorMessages))filaedBlock{
+    [[YHAFNetWorkingRequset sharedRequset] request:POST urlString:URL_AppCustomerAgentCategory parameters:parameters finished:^(NSDictionary *responseObject, NSError *error) {
+        if (!error){
+            if (CONFIRM_NOT_NULL(responseObject)){
+                NSNumber *flag = [responseObject objectForKey:RESPONSE_RESULT_CODE];
+                if ([flag intValue] == 0){
+                    NSString *info = [responseObject objectForKey:RESPONSE_RESULT_INFO];
+                    successBLock(info);
+                }else{
+                    filaedBlock([responseObject objectForKey:RESPONSE_RESULT_INFO]);
+                }
+            }
+        }else{
+            filaedBlock([self dealWithError:error.code]);
+        }
+    }];
+}
+@end
+

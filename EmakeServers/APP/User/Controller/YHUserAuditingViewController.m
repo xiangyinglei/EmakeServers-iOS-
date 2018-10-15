@@ -1,0 +1,304 @@
+//
+//  YHUserAuditingViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/2/1.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHUserAuditingViewController.h"
+#import "Header.h"
+#import "YHMineTableViewCell.h"
+#import "YHUserInfoHeaderTableViewCell.h"
+#import "YHCardInfoViewController.h"
+#import "TPKeyboardAvoidingTableView.h"
+#import "YHDeleagteCategoryViewController.h"
+#import "YHMemeberViewController.h"
+@interface YHUserAuditingViewController ()<UITableViewDataSource,UITableViewDelegate,UITextViewDelegate>
+@property (nonatomic,retain)TPKeyboardAvoidingTableView *tableView;
+@property (nonatomic,retain)NSArray *leftTilteOne;
+@property (nonatomic,retain)PlaceholderTextView *textView;
+@property (nonatomic,copy)NSString *originalUserType;
+@end
+
+@implementation YHUserAuditingViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"基本信息";
+    self.view.backgroundColor = TextColor_F7F7F7;
+    self.originalUserType = self.model.UserType;
+    self.leftTilteOne = [NSArray arrayWithObjects:@"代理品类：",@"会员权益：",@"性别：",@"代理城市：",nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(getUserData) name:NotificationUserInfoRefresh object:nil];
+    [self configSubViews];
+    // Do any additional setup after loading the view.
+    [self addRigthDropBtn];
+    [self getUserData];
+}
+- (void)configSubViews{
+    
+    self.tableView = [[TPKeyboardAvoidingTableView alloc]initWithFrame:CGRectZero style:UITableViewStylePlain];
+    self.tableView.delegate = self;
+    self.tableView.dataSource = self;
+    self.tableView.showsVerticalScrollIndicator = false;
+    self.tableView.showsHorizontalScrollIndicator = false;
+    self.tableView.separatorColor = [UIColor clearColor];
+    self.tableView.backgroundColor = [UIColor clearColor];
+    self.tableView.estimatedSectionFooterHeight = 0;
+    self.tableView.estimatedSectionHeaderHeight = 0;
+    self.tableView.scrollEnabled = false;
+    [self.view addSubview:self.tableView];
+    [self.tableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.height.mas_equalTo(HeightRate(176+90+155));
+        make.right.mas_equalTo(0);
+    }];
+    
+    UIButton *pass = [UIButton buttonWithType:UIButtonTypeCustom];
+    [pass setTitle:@"通过" forState:UIControlStateNormal];
+    [pass setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [pass setBackgroundColor:ColorWithHexString(APP_THEME_MAIN_COLOR)];
+    [pass addTarget:self action:@selector(passNext) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:pass];
+    
+    [pass mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(WidthRate(159));
+        make.right.mas_equalTo(WidthRate(-22));
+        make.top.mas_equalTo(self.tableView.mas_bottom).offset(HeightRate(20));
+        make.height.mas_equalTo(HeightRate(40));
+    }];
+    
+    UIButton *Unpass = [UIButton buttonWithType:UIButtonTypeCustom];
+    [Unpass setTitle:@"不通过" forState:UIControlStateNormal];
+    [Unpass setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [Unpass setBackgroundColor:ColorWithHexString(SymbolTopColor)];
+    [Unpass addTarget:self action:@selector(reject) forControlEvents:UIControlEventTouchUpInside];
+    [self.view addSubview:Unpass];
+    
+    [Unpass mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(WidthRate(22));
+        make.width.mas_equalTo(WidthRate(159));
+        make.top.mas_equalTo(self.tableView.mas_bottom).offset(HeightRate(20));
+        make.height.mas_equalTo(HeightRate(40));
+    }];
+}
+- (void)getUserData{
+    if (self.model.UserId) {
+        [[YHJsonRequest shared] getUsersInfoWithUserId:self.model.UserId SucceededBlock:^(YHUserModel *model) {
+            self.model = model;
+            [self.tableView reloadData];
+        } failedBlock:^(NSString *errorMessage) {
+            [self.view makeToast:errorMessage duration:1.0 position:CSToastPositionCenter];
+        }];
+    }
+}
+- (void)passNext{
+    
+    [self.view endEditing:YES];
+    if (!self.textView.text||self.textView.text.length<=0) {
+        self.model.AuditRemark = @"";
+    }
+    self.model.AgentState = @"1";
+    NSDictionary *params = @{@"UserId":self.model.UserId,@"AgentState":@"1",@"AuditRemark":self.model.AuditRemark};
+    [self.view showWait:@"请等待" viewType:CurrentView];
+    [[YHJsonRequest shared] auditCityDelegateUserWithParams:params SuccessBlock:^(NSString *successMessages) {
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:@"审核成功" duration:1.0 position:CSToastPositionCenter title:nil image:nil style:nil completion:^(BOOL didTap) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:NotificationAuditUserRefresh object:nil];
+            [self.navigationController popViewControllerAnimated:YES];
+        }];
+    } fialureBlock:^(NSString *errorMessages) {
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (void)reject{
+    
+    [self.view endEditing:YES];
+    if (!self.textView.text||self.textView.text.length<=0) {
+        [self.view makeToast:@"请填写审核备注" duration:1.0 position:CSToastPositionCenter];
+        return;
+    }
+    self.model.AgentState = @"2";
+    NSDictionary *params = @{@"UserId":self.model.UserId,@"AgentState":@"2",@"AuditRemark":self.textView.text};
+    [self.view showWait:@"请等待" viewType:CurrentView];
+    [[YHJsonRequest shared] auditCityDelegateUserWithParams:params SuccessBlock:^(NSString *successMessages) {
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:@"操作成功" duration:1.0 position:CSToastPositionCenter title:nil image:nil style:nil completion:^(BOOL didTap) {
+            [[NSNotificationCenter defaultCenter] postNotificationName:NotificationAuditUserRefresh object:nil];
+            [self.navigationController popViewControllerAnimated:YES];
+        }];
+    } fialureBlock:^(NSString *errorMessages) {
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.row == 0) {
+        YHUserInfoHeaderTableViewCell *cell = nil;
+        if (!cell) {
+            cell =[[YHUserInfoHeaderTableViewCell alloc]init];
+        }
+        [cell setData:self.model];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }else if (indexPath.row == 5) {
+        UITableViewCell *cell = nil;
+        if (!cell) {
+            cell = [[UITableViewCell alloc]init];
+        }
+        self.textView = [[PlaceholderTextView alloc]initWithFrame:CGRectMake(0, 0, ScreenWidth, HeightRate(78))];
+        self.textView.placeholder = @"    审核备注";
+        self.textView.placeholderColor = TextColor_797979;
+        self.textView.delegate = self;
+        [cell.contentView addSubview:self.textView];
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }else{
+        YHMineTableViewCell *cell = nil;
+        if (!cell) {
+            cell =[[YHMineTableViewCell alloc]init];
+        }
+        cell.leftLabel.text = self.leftTilteOne[indexPath.row-1];
+        switch (indexPath.row) {
+            case 1:{
+                NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+                for (NSDictionary *dict in self.model.IdentityCategorys) {
+                    NSString *cateName = [dict objectForKey:@"CategoryBName"];
+                    [cateArray addObject:cateName];
+                }
+                cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
+                if (cateArray.count >0) {
+                    [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                        make.right.mas_equalTo(WidthRate(-38));
+                    }];
+                    UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_right"]];
+                    [cell.contentView addSubview:rigthImage];
+                    
+                    [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                        make.right.mas_equalTo(WidthRate(-20));
+                        make.width.mas_equalTo(WidthRate(14));
+                        make.height.mas_equalTo(WidthRate(14));
+                        make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                    }];
+                }
+            }
+                break;
+            case 2:{
+                NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+                for (NSDictionary *dict in self.model.IdentityCategorys) {
+                    NSString *cateName = [dict objectForKey:@"CategoryBName"];
+                    [cateArray addObject:cateName];
+                }
+                cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
+                
+                if (cateArray.count >0) {
+                    [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                        make.right.mas_equalTo(WidthRate(-38));
+                    }];
+                    UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_right"]];
+                    [cell.contentView addSubview:rigthImage];
+                    
+                    [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                        make.right.mas_equalTo(WidthRate(-20));
+                        make.width.mas_equalTo(WidthRate(14));
+                        make.height.mas_equalTo(WidthRate(14));
+                        make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                    }];
+                }
+            }
+                break;
+            case 3:{
+                if ([self.model.Sex isEqualToString:@"0"]) {
+                    cell.rightLabel.text = @"男";
+                }else if ([self.model.Sex isEqualToString:@"1"]){
+                    cell.rightLabel.text = @"女";
+                }else{
+                    cell.rightLabel.text = @"保密";
+                }
+            }
+                break;
+            case 4:
+                cell.rightLabel.text = self.model.AgentCity;
+                break;
+            default:
+                [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                    make.right.mas_equalTo(WidthRate(-38));
+                }];
+                UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_right"]];
+                [cell.contentView addSubview:rigthImage];
+                
+                [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                    make.right.mas_equalTo(WidthRate(-20));
+                    make.width.mas_equalTo(WidthRate(14));
+                    make.height.mas_equalTo(WidthRate(14));
+                    make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                }];
+                break;
+        }
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+        return cell;
+    }
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    return 6;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    
+    if (indexPath.row == 0) {
+        return  HeightRate(90);
+    }else if (indexPath.row == 5){
+        return HeightRate(155);
+    }else{
+        return HeightRate(44);
+    }
+}
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
+    if (indexPath.row == 1) {
+        if (self.model.IdentityCategorys.count <= 0) {
+            return;
+        }
+        YHDeleagteCategoryViewController *vc = [[YHDeleagteCategoryViewController alloc] init];
+        vc.userId = self.model.UserId;
+        vc.cateArray = self.model.IdentityCategorys;
+        [self.navigationController pushViewController:vc animated:YES];
+    }else if (indexPath.row == 2) {
+        if (self.model.IdentityCategorys.count <= 0) {
+            return;
+        }
+        YHMemeberViewController *vc = [[YHMemeberViewController alloc] init];
+        vc.userId = self.model.UserId;
+        vc.cateArray = self.model.IdentityCategorys;
+        [self.navigationController pushViewController:vc animated:YES];
+    }
+}
+#pragma mark -  UITextViewDelegate
+- (void)textViewDidBeginEditing:(UITextView *)textView{
+    self.textView.placeholder = @"";
+    
+}
+-(void)textViewDidEndEditing:(UITextView *)textView{
+    if (!textView.text||textView.text.length<=0) {
+        self.textView.placeholder = @"    审核备注";
+    }else{
+        self.model.AuditRemark = textView.text;
+    }
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

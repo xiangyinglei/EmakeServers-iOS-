@@ -1,0 +1,259 @@
+//
+//  YHMessageClassifyMainViewController.m
+//  EmakeServers
+//
+//  Created by 谷伟 on 2018/6/5.
+//  Copyright © 2018年 谷伟. All rights reserved.
+//
+
+#import "YHMessageClassifyMainViewController.h"
+#import "Header.h"
+#import "SDChatMessage.h"
+#import "YHMessageClassifyOrderViewController.h"
+#import "YHFileModel.h"
+#import "ChatNewViewController.h"
+#import "ChatVoiceModel.h"
+@interface YHMessageClassifyMainViewController ()
+@property (nonatomic,strong)NSMutableArray *classifyMessageArray;
+@end
+
+@implementation YHMessageClassifyMainViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+    self.title = @"归档";
+    self.view.backgroundColor = TextColor_F5F5F5;
+    [self configSubviews];
+    [self messageClassify];
+}
+- (void)configSubviews{
+    NSArray *titles = nil;
+    if (self.isLookUp) {
+       titles = @[@"订单信息",@"询价信息",@"其他信息"];
+    }else{
+       titles = @[@"关联订单",@"询价归档",@"其他归档"];
+    }
+    NSArray *titleImage = @[@"guanliandingdan",@"xunjiaguidang",@"qitaguidang"];
+    for (int i = 0; i<3; i++) {
+        UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+        btn.backgroundColor = ColorWithHexString(APP_THEME_MAIN_COLOR);
+        [btn setTitle:titles[i] forState:UIControlStateNormal];
+        if (self.isLookUp) {
+            btn.tag = 100 + i;
+        }else{
+            btn.tag = i;
+        }
+        [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        btn.titleLabel.font = SYSTEM_FONT(AdaptFont(14));
+        btn.layer.cornerRadius = WidthRate(3);
+        [btn addTarget:self action:@selector(goClassify:) forControlEvents:UIControlEventTouchUpInside];
+        [btn setImage:[UIImage imageNamed:titleImage[i]] forState:UIControlStateNormal];
+        [btn setImageEdgeInsets:UIEdgeInsetsMake(0, 0, 0, WidthRate(10))];
+        [self.view addSubview:btn];
+        
+        [btn mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.centerX.mas_equalTo(self.view.mas_centerX);
+            make.top.mas_equalTo(HeightRate(60)+(TOP_BAR_HEIGHT)+HeightRate(63)*i);
+            make.width.mas_equalTo(WidthRate(232));
+            make.height.mas_equalTo(HeightRate(40));
+        }];
+    }
+}
+- (void)messageClassify{
+    self.classifyMessageArray = [NSMutableArray arrayWithCapacity:0];
+    for (SDChatMessage *mesage in self.messageArray) {
+        if ([mesage.msgType isEqualToString:@"Image"]||[mesage.msgType isEqualToString:@"File"]||[mesage.msgType isEqualToString:@"Voice"]||[mesage.msgType isEqualToString:@"Text"]) {
+            [self.classifyMessageArray addObject:mesage];
+        }
+    }
+}
+- (void)goClassify:(UIButton *)btn{
+    switch (btn.tag) {
+        case 0:
+            [self goRelevanceOrder];
+            break;
+        case 1:
+            [self goRelevanceConsultWithIndex:@"2"];
+            break;
+        case 2:
+            [self goRelevanceConsultWithIndex:@"0"];
+            break;
+        case 100:
+            [self goRelevanceMessage:@"1"];
+            break;
+        case 101:
+            [self goRelevanceMessage:@"2"];
+            break;
+        case 102:
+            [self goRelevanceMessage:@"0"];
+            break;
+        default:
+            break;
+    }
+}
+- (void)goRelevanceOrder{
+    NSMutableArray *messageArray = [NSMutableArray arrayWithCapacity:0];
+    for (SDChatMessage *msg in self.classifyMessageArray) {
+        if (!msg.sendTime||msg.sendTime.length<=0) {
+            msg.sendTime = @"";
+        }
+        NSString *messageString = [self ceratMessageModel:msg];
+        NSString *messageIDString = msg.messgaeUUID;
+        NSDictionary *messagDic = @{@"MessageId":messageIDString,@"MessageDate":msg.sendTime,@"Message":messageString};
+        [messageArray addObject:messagDic];
+    }
+    YHMessageClassifyOrderViewController *vc = [[YHMessageClassifyOrderViewController alloc] init];
+    vc.userName = self.userName;
+    vc.userId = self.userId;
+    vc.storeId = self.storeId;
+    vc.storeName = self.storeName;
+    vc.storePhoto = self.storePhoto;
+    vc.storePhoneNumber = self.storePhoneNumber;
+    vc.isFormStore = self.isFormStore;
+    vc.userPhoneNumber = self.userPhoneNumber;
+    vc.archiveArray = messageArray;
+    vc.isFormStore = self.isFormStore;
+    vc.block = ^(NSString *text) {
+        self.block(@"success");
+    };
+    vc.listId = self.listId;
+    [self.navigationController pushViewController:vc animated:YES];
+    
+}
+- (void)goRelevanceConsultWithIndex:(NSString *)index{
+    
+    NSMutableArray *messageArray = [NSMutableArray arrayWithCapacity:0];
+    for (SDChatMessage *msg in self.classifyMessageArray) {
+        if (!msg.sendTime||msg.sendTime.length<=0) {
+            msg.sendTime = @"";
+        }
+        NSString *messageString = [self ceratMessageModel:msg];
+        NSString *messageIDString = msg.messgaeUUID;
+        NSDictionary *messagDic = @{@"MessageId":messageIDString,@"MessageDate":msg.sendTime,@"Message":messageString};
+        [messageArray addObject:messagDic];
+    }
+    NSDictionary *dict = nil;
+    if (self.isFormStore) {
+        dict = @{@"OrderNo":@"",@"StoreId": self.storeId,@"ArchiveType":index,@"Messages":messageArray,@"UserId":@""};
+    }else{
+        dict = @{@"OrderNo":@"",@"UserId": self.userId,@"ArchiveType":index,@"Messages":messageArray,@"StoreId":@""};
+    }
+    [self.view showWait:@"归档中" viewType:CurrentView];
+    [[YHJsonRequest shared] appChatPostToServers:dict SuccessBlock:^(NSString *successMessages){
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:successMessages duration:1.0 position:CSToastPositionCenter title:nil image:nil style:nil completion:^(BOOL didTap) {
+            self.block(@"success");
+            [self.navigationController popViewControllerAnimated:YES];
+        }];
+    }fialureBlock:^(NSString *errorMessages) {
+        [self.view hideWait:CurrentView];
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (void)goRelevanceMessage:(NSString *)index{
+    if ([index isEqualToString:@"1"]) {
+        YHMessageClassifyOrderViewController *vc = [[YHMessageClassifyOrderViewController alloc] init];
+        vc.userName = self.userName;
+        vc.isLookUp = YES;
+        if (!self.isFormStore) {
+            vc.userId = self.userId;
+            vc.userPhoneNumber = self.userPhoneNumber;
+            vc.userType = self.userType;
+            vc.isFormStore = false;
+        }else{
+            vc.storeId = self.storeId;
+            vc.storePhoto = self.storePhoto;
+            vc.storeName = self.storeName;
+            vc.storePhoneNumber = self.storePhoneNumber;
+            vc.isFormStore = true;
+        }
+        vc.isFromUserInfo = YES;
+        
+        [self.navigationController pushViewController:vc animated:YES];
+    }else{
+        NSString *requsetParams = @"";
+        if (self.isFormStore) {
+            requsetParams = [NSString stringWithFormat:@"ArchiveType=%@&StoreId=%@",index,self.storeId];
+        }else{
+           requsetParams = [NSString stringWithFormat:@"ArchiveType=%@&UserId=%@",index,self.userId];
+        }
+        [[YHJsonRequest shared] getAppChatFromServers:requsetParams SuccessBlock:^(NSArray *messageArray) {
+            UIStoryboard *storyboard = [UIStoryboard storyboardWithName:@"Chat" bundle:nil];
+            ChatNewViewController *vc = [storyboard instantiateViewControllerWithIdentifier:@"Chat"];
+            vc.hidesBottomBarWhenPushed = YES;
+            vc.userAvatar = self.userAvata;
+            vc.userType = self.userType;
+            vc.listID = self.listId;
+            if (self.isFormStore) {
+                vc.userName = self.storeName;
+            }else{
+                if (!self.userName||self.userName.length<=0) {
+                    vc.userName = [NSString stringWithFormat:@"用户%@",[self.userPhoneNumber substringFromIndex:self.userPhoneNumber.length-4]];
+                }else{
+                    vc.userName = self.userName;
+                }
+            }
+            vc.isDisplayArchiveMessage = YES;
+            vc.phoneNumber = self.userPhoneNumber;
+            vc.archiveData = messageArray;
+            vc.isLookUpArchive = YES;
+            [self.navigationController pushViewController:vc animated:YES];
+        } fialureBlock:^(NSString *errorMessages) {
+            [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+        }];
+    }
+}
+- (NSString *)ceratMessageModel:(SDChatMessage *)msg{
+    chatBodyModel *bodyModel = nil;
+    if ([msg.msgType isEqualToString:@"Image"]) {
+        NSString *fileNamePath = msg.msg;
+        bodyModel = [[chatBodyModel alloc] initWithImage:fileNamePath Type:@"Image"];
+    }else if ([msg.msgType isEqualToString:@"File"]) {
+        YHFileModel *fileModel = [YHFileModel mj_objectWithKeyValues:[msg.msg mj_JSONObject]];
+        NSString *archiveText = [NSString stringWithFormat:@"FileName:%@+FileSize:%@",fileModel.FileName,fileModel.FileSize];
+        bodyModel = [[chatBodyModel alloc] initWithText:archiveText FilePath:fileModel.FilePath Type:@"File"];
+    }else if ([msg.msgType isEqualToString:@"Voice"]) {
+        ChatVoiceModel *model = [ChatVoiceModel mj_objectWithKeyValues:msg.msg];
+        bodyModel = [[chatBodyModel alloc] initWithVoicePath:model.voicePath voiceDuration:model.duration Type:@"Voice"];
+    }else if ([msg.msgType isEqualToString:@"Text"]) {
+        bodyModel = [[chatBodyModel alloc] initWithText:msg.msg Type:@"Text"];
+    }
+    chatUserModel *userModel = nil;
+    NSString *ServiceID = [NSString stringWithFormat:@"%@",[[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_ServiceID]];
+    NSString *userID = [NSString stringWithFormat:@"%@",[[NSUserDefaults standardUserDefaults] objectForKey:LOGIN_USERID]];
+    NSString *nickname = [NSString stringWithFormat:@"客服%@",ServiceID];
+    NSString *clientId = [NSString stringWithFormat:@"customer/%@",ServiceID];
+    
+    if ([msg.sender isEqualToString:@"1"]) {
+        userModel = [[chatUserModel alloc]initWith:[Tools getHeadImageURL] formId:userID displayName:nickname clientID:clientId];
+    }else{
+        userModel = [[chatUserModel alloc]initWith:msg.staffAvata formId:self.userId displayName:msg.staffName clientID:clientId];
+    }
+    NSDictionary *userDic = [userModel mj_keyValues];
+    NSDictionary *bodyDic = [bodyModel mj_keyValues];
+    chatNewModel *messagModel = nil;
+    if ([msg.sender isEqualToString:@"1"]) {
+        messagModel = [[chatNewModel alloc]initWithId:self.userId messageType:@"Message" messageId:msg.msgID user:userDic andMessageBody:bodyDic];
+    }else{
+        NSString *toID = [NSString stringWithFormat:@"customer/%@",ServiceID];
+        messagModel = [[chatNewModel alloc]initWithId:toID messageType:@"Message" messageId:msg.msgID user:userDic andMessageBody:bodyDic];
+    }
+    return [messagModel mj_JSONString];
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

@@ -1,0 +1,433 @@
+//
+//  YHShoppingCartConfirmViewController.m
+//  emake
+//
+//  Created by 谷伟 on 2017/11/13.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#import "YHShoppingCartConfirmViewController.h"
+#import "YHShoppingCartConfirmCell.h"
+#import "Tools.h"
+#import "Header.h"
+
+#import <UIKit/UIKit.h>
+@interface YHShoppingCartConfirmViewController ()<UITableViewDelegate,UITableViewDataSource>{
+    
+    UITableView * myTableView;
+    NSInteger recordSection;
+    BOOL isLeader;
+    NSString *groupID;
+}
+@property (nonatomic,retain)UIButton *dicussBtn;
+@property (nonatomic,retain)NSMutableArray *selectArray;
+@property (nonatomic,retain)UILabel *totalLabel;
+@property(nonatomic,strong)NSArray *groupArr;
+@property(nonatomic,copy)NSString *contractNo;
+@property(nonatomic,copy)NSDictionary *contractDict;
+@property(nonatomic,copy)NSDictionary *contractProtocolDict;
+@property(nonatomic,copy)NSDictionary *contractSaleDict;
+@property(nonatomic,strong)NSArray *productArray;
+@property(nonatomic,strong)UIButton *sendSaleButton;
+@property(nonatomic,strong)UIButton *sendContractButton;
+@end
+
+@implementation YHShoppingCartConfirmViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    // Do any additional setup after loading the view.
+   
+    self.title =@"订单详情";
+    self.view.backgroundColor = TextColor_F7F7F7;
+    [self configUI];
+    [self addRigthDropBtn];
+    [self addBottomView];
+    self.selectArray = [self dealWithOrderData:[self.eventText mj_JSONObject]];
+    NSDictionary *dict = [self.eventText mj_JSONObject];
+    if ([dict objectForKey:@"Contract"]) {
+        self.contractNo = [dict objectForKey:@"Contract"];
+        [self getProtocolDataWithContractNo:[dict objectForKey:@"Contract"]];
+    }
+}
+- (void)getProtocolDataWithContractNo:(NSString *)contractNo{
+    
+    [[YHJsonRequest shared] getWebContractWithContractNo:contractNo successBlock:^(NSDictionary *dict) {
+        if ([dict objectForKey:@"MessageBody"]) {
+            NSDictionary *MessageBody = [dict objectForKey:@"MessageBody"];
+            //协议
+            if ([MessageBody objectForKey:@"ContractAgreement"] != nil) {
+                self.contractProtocolDict = [MessageBody objectForKey:@"ContractAgreement"] ;
+            }
+            //买卖合同
+            self.contractSaleDict = [MessageBody objectForKey:@"ContractHeader"] ;
+            if (self.contractSaleDict != nil && [self.contractSaleDict objectForKey:@"Url"] != nil) {
+                self.sendSaleButton.hidden = false;
+                [self.sendContractButton setTitle:@"合同+协议" forState:UIControlStateNormal];
+            }else{
+                self.sendSaleButton.hidden = true;
+                [self.sendContractButton setTitle:@"合同" forState:UIControlStateNormal];
+            }
+            //完整合同
+            if ([MessageBody objectForKey:@"ContractTotal"] != nil) {
+                self.contractDict = [MessageBody objectForKey:@"ContractTotal"];
+            }
+        }
+        if ([dict objectForKey:@"Products"] != nil) {
+            self.productArray = [dict objectForKey:@"Products"];
+        }
+        [myTableView reloadData];
+    }fialureBlock:^(NSString *errorMessages) {
+        [self.view makeToast:errorMessages duration:1.0 position:CSToastPositionCenter];
+    }];
+}
+- (void)addBottomView{
+    
+    UIView *bottomView = [[UIView alloc]init];
+    bottomView.backgroundColor = [UIColor whiteColor];
+    [self.view addSubview:bottomView];
+    
+    [bottomView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.mas_equalTo(0);
+        make.right.mas_equalTo(0);
+        make.bottom.mas_equalTo(0);
+        make.height.mas_equalTo(HeightRate(50));
+    }];
+    
+    self.sendSaleButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.sendSaleButton.backgroundColor = ColorWithHexString(APP_THEME_MAIN_COLOR);
+    self.sendSaleButton.hidden = true;
+    [self.sendSaleButton setTitle:@"买卖合同" forState:UIControlStateNormal];
+    [self.sendSaleButton addTarget:self action:@selector(sendSaleContract) forControlEvents:UIControlEventTouchUpInside];
+    [self.sendSaleButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [self.sendSaleButton setImage:[UIImage imageNamed:@"fasong01s"] forState:UIControlStateNormal];
+    [self.sendSaleButton setImageEdgeInsets:UIEdgeInsetsMake(0, 0, 0, WidthRate(10))];
+    self.sendSaleButton.titleLabel.font = SYSTEM_FONT(AdaptFont(14));
+    self.sendSaleButton.layer.cornerRadius = HeightRate(15);
+    [bottomView addSubview:self.sendSaleButton];
+    
+    [self.sendSaleButton mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.centerX.mas_equalTo(self.view.mas_centerX).offset(WidthRate(-80));
+        make.height.mas_equalTo(HeightRate(30));
+        make.width.mas_equalTo(WidthRate(124));
+        make.centerY.mas_equalTo(bottomView.mas_centerY);
+    }];
+    
+    
+    self.sendContractButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.sendContractButton.backgroundColor = ColorWithHexString(APP_THEME_MAIN_COLOR);
+    [self.sendContractButton setTitle:@"合同+协议" forState:UIControlStateNormal];
+    [self.sendContractButton addTarget:self action:@selector(sendContract) forControlEvents:UIControlEventTouchUpInside];
+    [self.sendContractButton setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    [self.sendContractButton setImage:[UIImage imageNamed:@"fasong01s"] forState:UIControlStateNormal];
+    [self.sendContractButton setImageEdgeInsets:UIEdgeInsetsMake(0, WidthRate(0), 0, WidthRate(10))];
+    self.sendContractButton.titleLabel.font = SYSTEM_FONT(AdaptFont(14));
+    self.sendContractButton.layer.cornerRadius = HeightRate(15);
+    [bottomView addSubview:self.sendContractButton];
+    
+    [self.sendContractButton mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.centerX.mas_equalTo(self.view.mas_centerX).offset(WidthRate(80));
+        make.height.mas_equalTo(HeightRate(30));
+        make.width.mas_equalTo(WidthRate(124));
+        make.centerY.mas_equalTo(bottomView.mas_centerY);
+    }];
+}
+- (void)configUI{
+    
+    CGFloat height = self.view.frame.size.height-(TOP_BAR_HEIGHT)-HeightRate(50);
+    NSDictionary *dict = [self.eventText mj_JSONObject];
+    if ([dict objectForKey:@"IsIncludeTax"]) {
+        if (![[dict objectForKey:@"IsIncludeTax"] isEqualToString:@"1"]) {
+            height = self.view.frame.size.height-(TOP_BAR_HEIGHT);
+        }
+    }
+    myTableView = [[UITableView alloc]initWithFrame:CGRectMake(0, TOP_BAR_HEIGHT, self.view.frame.size.width, height) style:UITableViewStyleGrouped];
+    myTableView.delegate = self;
+    myTableView.dataSource = self;
+    myTableView.showsVerticalScrollIndicator = NO;
+    myTableView.showsVerticalScrollIndicator = NO;
+    myTableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    myTableView.estimatedSectionHeaderHeight =0;
+    myTableView.estimatedSectionFooterHeight = 0;
+    myTableView.estimatedRowHeight = 200;
+    myTableView.backgroundColor = TextColor_F7F7F7;
+    [self.view addSubview:myTableView];
+    
+    
+    [myTableView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.top.mas_equalTo(TOP_BAR_HEIGHT);
+        make.left.mas_equalTo(0);
+        make.right.mas_equalTo(0);
+        make.bottom.mas_equalTo(HeightRate(-50));
+    }];
+}
+- (NSMutableArray *)dealWithOrderData:(NSDictionary *)orderDic{
+    
+    NSMutableArray *shoppingCartArr = [NSMutableArray arrayWithCapacity:0];
+    shoppingCartArr = [YHShoppingCartModel mj_objectArrayWithKeyValuesArray:orderDic[@"Data"]];
+    return shoppingCartArr;
+}
+- (void)sendSaleContract{
+    chatBodyModel *model = [chatBodyModel mj_objectWithKeyValues:self.contractSaleDict];
+    model.Type = @"MutilePart";
+    model.Url = [NSString stringWithFormat:@"%@%@",model.Url,self.contractNo];
+    model.Contract = self.contractNo;
+    if (!self.contractNo||self.contractNo.length<=0) {
+        [self.view makeToast:@"获取合同号失败" duration:1.0 position:CSToastPositionCenter];
+        return;
+    }
+    if (!model.Url||model.Url.length<=0) {
+        [self.view makeToast:@"获取买卖合同地址失败" duration:1.0 position:CSToastPositionCenter];
+        return;
+    }
+    self.sendProtocolBlock(model);
+    [self.navigationController popViewControllerAnimated:YES];
+}
+- (void)sendContract{
+    
+    chatBodyModel *model = [chatBodyModel mj_objectWithKeyValues:self.contractDict];
+    model.Type = @"MutilePart";
+    model.Url = [NSString stringWithFormat:@"%@%@",model.Url,self.contractNo];
+    model.Contract = self.contractNo;
+    if (!self.contractNo||self.contractNo.length<=0) {
+        [self.view makeToast:@"获取合同号失败" duration:1.0 position:CSToastPositionCenter];
+        return;
+    }
+    if (!model.Url||model.Url.length<=0) {
+        [self.view makeToast:@"获取完整合同地址失败" duration:1.0 position:CSToastPositionCenter];
+        return;
+    }
+    self.sendProtocolBlock(model);
+    [self.navigationController popViewControllerAnimated:YES];
+}
+#pragma mark === UITableViewDelegate & UITableViewDataSources
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
+    return self.selectArray.count;
+}
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
+    
+    return 1;
+}
+- (CGFloat)tableView:(UITableView *)tableView estimatedHeightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    return 100;
+}
+-(CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
+    return UITableViewAutomaticDimension;
+}
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
+
+    YHShoppingCartConfirmCell *cell = nil;
+    if (!cell) {
+        cell = [[YHShoppingCartConfirmCell alloc]init];
+    }
+    YHShoppingCartModel *model = self.selectArray[indexPath.section];
+    [cell setData:model];
+    cell.sendBlock = ^{
+        chatBodyModel *model = [chatBodyModel mj_objectWithKeyValues:self.contractProtocolDict];
+        model.Type = @"MutilePart";
+        NSDictionary *productDic = self.productArray[indexPath.row];
+        model.Url = [NSString stringWithFormat:@"%@%@/%@",model.Url,self.contractNo,[productDic objectForKey:@"MainGoodsCode"]];
+        model.Contract = self.contractNo;
+        self.sendProtocolBlock(model);
+        [self.navigationController popViewControllerAnimated:YES];
+    };
+    return cell;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section{
+    if (section == self.selectArray.count-1) {
+        NSDictionary *dict = [self.eventText mj_JSONObject];
+        if ([[dict objectForKey:@"InsurdAmount"] floatValue] <=2000 && [[dict objectForKey:@"InsurdAmount"] floatValue] > 0) {
+            return HeightRate(90);
+        }else{
+            if ([[dict objectForKey:@"InsurdAmount"] floatValue] <= 0 && [[dict objectForKey:@"IsIncludeTax"] isEqualToString:@"0"]) {
+                return HeightRate(90);
+            }
+            return HeightRate(130);
+        }
+    }
+    return TableViewFooterNone;
+}
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+
+    if (section == 0) {
+        return TableViewHeaderNone;
+    }
+    return HeightRate(10);
+}
+- (UIView *)tableView:(UITableView *)tableView viewForFooterInSection:(NSInteger)section{
+    NSDictionary *dict = [self.eventText mj_JSONObject];
+    if (section == self.selectArray.count-1) {
+        
+        UIView *view = [[UIView alloc]initWithFrame:CGRectMake(0, 0, ScreenWidth, HeightRate(130))];
+        view.backgroundColor = [UIColor whiteColor];
+        double price = 0.00;
+        for(YHShoppingCartModel *model in self.selectArray){
+            price = price + model.GoodsNumber.integerValue*[model.GoodsPrice doubleValue];
+        }
+        
+        UILabel *labelTotalNum = [[UILabel alloc]init];
+        labelTotalNum.textColor = ColorWithHexString(APP_THEME_MAIN_COLOR);
+        labelTotalNum.font = SYSTEM_FONT(AdaptFont(14));
+        NSString *stringTotal = [NSString stringWithFormat:@"共%@件商品 合计：¥%.2f",[dict objectForKey:@"totalNumber"],floorNumber(price)];
+        NSString *numberOfItem =  [NSString stringWithFormat:@"%@",[dict objectForKey:@"totalNumber"]];
+        NSMutableAttributedString *attributeTotalString = [[NSMutableAttributedString alloc]initWithString:stringTotal];
+        [attributeTotalString addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:AdaptFont(12)] range:NSMakeRange(0, numberOfItem.length+8)];
+        [attributeTotalString addAttribute:NSForegroundColorAttributeName value:[UIColor blackColor] range:NSMakeRange(0, numberOfItem.length+8)];
+        labelTotalNum.attributedText = attributeTotalString;
+        [view addSubview:labelTotalNum];
+        
+        [labelTotalNum mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(WidthRate(-6));
+            make.top.mas_equalTo((HeightRate(12)));
+        }];
+        
+        
+        UILabel *lineLabelFirst = [[UILabel alloc]init];
+        lineLabelFirst.backgroundColor = SepratorLineColor;
+        
+        [view addSubview:lineLabelFirst];
+        
+        [lineLabelFirst mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(0);
+            make.right.mas_equalTo(0);
+            make.height.mas_equalTo(0.6);
+            make.top.mas_equalTo(HeightRate(42));
+        }];
+        
+        
+        UILabel *labelInsurance = [[UILabel alloc]init];
+        labelInsurance.textAlignment = NSTextAlignmentRight;
+        labelInsurance.numberOfLines = 2;
+    
+        if (([[dict objectForKey:@"InsurdAmount"] floatValue] <= 0)&&[dict objectForKey:@"InsurdAmount"] != nil){
+            if ([[dict objectForKey:@"IsIncludeTax"] isEqualToString:@"1"]) {
+                double taxPrice = 0.00;
+                for(YHShoppingCartModel *model in self.selectArray){
+                    taxPrice = taxPrice + model.GoodsNumber.integerValue*[model.GoodsPrice doubleValue]*[model.GoodsTaxRate doubleValue];
+                }
+                labelInsurance.textColor = ColorWithHexString(SymbolTopColor);
+                NSString *stringTax = [NSString stringWithFormat:@"增值税：¥%.2f",floorNumber(taxPrice)];
+                NSMutableAttributedString *attributeTaxString = [[NSMutableAttributedString alloc]initWithString:stringTax];
+                [attributeTaxString addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:AdaptFont(12)] range:NSMakeRange(0, 4)];
+                [attributeTaxString addAttribute:NSForegroundColorAttributeName value:TextColor_666666 range:NSMakeRange(0, 4)];
+                labelInsurance.attributedText = attributeTaxString;
+            }else{
+                
+            }
+            
+        }else{
+            labelInsurance.textColor = RGBColor(108, 145, 237);
+            if ([[dict objectForKey:@"InsurdAmount"] floatValue] >2000) {
+                NSString *InsurdAmount  = [dict objectForKey:@"InsurdAmount"];
+                float InsurdAmountPay = [[dict objectForKey:@"InsurdAmount"] doubleValue]*0.005;
+                NSString *stringInsurdText =  [NSString stringWithFormat:@"人保保费0.5%%： ¥%.2f\n投保金额：¥%@",floorNumber(InsurdAmountPay),[dict objectForKey:@"InsurdAmount"]];
+                NSMutableAttributedString *attributeInsuranceString = [[NSMutableAttributedString alloc]initWithString:stringInsurdText];
+                [attributeInsuranceString addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:AdaptFont(12)] range:NSMakeRange(0, 4)];
+                [attributeInsuranceString addAttribute:NSForegroundColorAttributeName value:TextColor_666666 range:NSMakeRange(stringInsurdText.length -InsurdAmount.length -6, InsurdAmount.length +6)];
+                labelInsurance.attributedText = attributeInsuranceString;
+            }
+        }
+        labelInsurance.font = SYSTEM_FONT(AdaptFont(13));
+        [view addSubview:labelInsurance];
+        
+        [labelInsurance mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(WidthRate(-6));
+            if (([[dict objectForKey:@"InsurdAmount"] floatValue] <= 0)&&[dict objectForKey:@"InsurdAmount"] != nil){
+                make.top.mas_equalTo((HeightRate(55)));
+            }else{
+                make.top.mas_equalTo((HeightRate(53)));
+            }
+        }];
+        
+        UILabel *lineLabel = [[UILabel alloc]init];
+        lineLabel.backgroundColor = SepratorLineColor;
+        
+        [view addSubview:lineLabel];
+        
+        [lineLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(0);
+            make.right.mas_equalTo(0);
+            make.height.mas_equalTo(0.6);
+            if (([[dict objectForKey:@"InsurdAmount"] floatValue] <= 0)&&[dict objectForKey:@"InsurdAmount"] != nil){
+                make.top.mas_equalTo(HeightRate(85));
+            }else{
+                make.top.mas_equalTo(HeightRate(91));
+            }
+            if ([[dict objectForKey:@"InsurdAmount"] floatValue] <=2000 && [[dict objectForKey:@"InsurdAmount"] floatValue] > 0) {
+                make.top.mas_equalTo(HeightRate(45));
+                lineLabelFirst.hidden = true;
+            }else{
+                if ([[dict objectForKey:@"InsurdAmount"] floatValue] <= 0 && [[dict objectForKey:@"IsIncludeTax"] isEqualToString:@"0"]) {
+                    lineLabelFirst.hidden = true;
+                    make.top.mas_equalTo(HeightRate(45));
+                }else{
+                    lineLabelFirst.hidden = false;
+                }
+            }
+        }];
+        
+        UILabel *labelTotal = [[UILabel alloc]init];
+        labelTotal.textColor = [UIColor blackColor];
+        labelTotal.font = SYSTEM_FONT(AdaptFont(13));
+        NSString *totalPrice = [NSString stringWithFormat:@"%@",[dict objectForKey:@"totalPrice"]];
+        NSString *description = @"";
+        if ([dict objectForKey:@"IsIncludeTax"] != nil) {
+            if ([[dict objectForKey:@"IsIncludeTax"] isEqualToString:@"1"]) {
+                description = @"(含增值税，不含运费)";
+            }else{
+                description = @"(不含增值税，不含运费)";
+            }
+        }else{
+            description = @"(不含增值税，不含运费)";
+        }
+        NSString *text =  [NSString stringWithFormat:@"%@ 合计：¥%@ ",description,[dict objectForKey:@"totalPrice"]];
+        NSMutableAttributedString *nameString = [[NSMutableAttributedString alloc] initWithString:text];
+        [nameString addAttribute:NSForegroundColorAttributeName
+                           value:ColorWithHexString(APP_THEME_MAIN_COLOR)
+                           range:NSMakeRange(description.length+4, totalPrice.length+1)];
+        [nameString addAttribute:NSFontAttributeName
+                           value:[UIFont systemFontOfSize:AdaptFont(14)]
+                           range:NSMakeRange(description.length+4, totalPrice.length+1)];
+        [nameString addAttribute:NSForegroundColorAttributeName
+                           value:ColorWithHexString(SymbolTopColor)
+                           range:NSMakeRange(0, description.length)];
+        labelTotal.attributedText = nameString;
+        [view addSubview:labelTotal];
+        
+        [labelTotal mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.right.mas_equalTo(WidthRate(-6));
+            make.top.mas_equalTo(lineLabel.mas_bottom).offset(HeightRate(13));
+        }];
+        
+        UILabel *lineLabelAnother = [[UILabel alloc]init];
+        lineLabelAnother.backgroundColor = SepratorLineColor;
+        
+        [view addSubview:lineLabelAnother];
+        
+        [lineLabelAnother mas_makeConstraints:^(MASConstraintMaker *make) {
+            make.left.mas_equalTo(0);
+            make.right.mas_equalTo(0);
+            make.height.mas_equalTo(0.6);
+            make.bottom.mas_equalTo(HeightRate(0));
+        }];
+        return view;
+    }
+    return nil;
+}
+- (void)didReceiveMemoryWarning {
+    [super didReceiveMemoryWarning];
+    // Dispose of any resources that can be recreated.
+}
+
+/*
+#pragma mark - Navigation
+
+// In a storyboard-based application, you will often want to do a little preparation before navigation
+- (void)prepareForSegue:(UIStoryboardSegue *)segue sender:(id)sender {
+    // Get the new view controller using [segue destinationViewController].
+    // Pass the selected object to the new view controller.
+}
+*/
+
+@end

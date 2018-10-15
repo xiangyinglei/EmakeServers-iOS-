@@ -1,0 +1,121 @@
+//
+//  FMDBManager.h
+//  emake
+//
+//  Created by 谷伟 on 2017/8/31.
+//  Copyright © 2017年 emake. All rights reserved.
+//
+
+#import <Foundation/Foundation.h>
+#import "SDChatMessage.h"
+@interface FMDBManager : NSObject
+@property(nonatomic,strong) SDChatMessage *message;
+/**
+ * 单例
+ *
+ */
++(FMDBManager *)sharedManager;
+/**
+ * 聊天数据库初始化
+ *
+ */
+-(void)initMessageChatDataWithUserID:(NSString *)userID;
+/**
+ * 聊天列表数据库初始化
+ *
+ */
+- (void)initMessageChatListData;
+/**
+ *  添加一条消息
+ *
+ */
+- (void)addMessage:(SDChatMessage *)message andUserID:(NSString *)userId;
+/**
+ *  获取某一页的消息
+ *
+ */
+- (void)getAllMessageWithPage:(NSInteger)page andLastMessageID:(NSInteger)lastMessageID andWithUserId:(NSString *)userId  success:(void (^)(NSArray * responseObject))success failure:(void (^)(NSString * errorObject))failure;
+/**
+ *  获取聊天列表（不分页)
+ *
+ */
+- (NSMutableArray *)getAllUserChatList;
+/**
+ *  判断用户聊天记录表是否存在
+ *
+ */
+- (BOOL)userChatDataIsExist:(NSString *)userId;
+/**
+ *  判断用户聊天列表信息是否存在
+ *
+ */
+- (BOOL)userIsExist:(NSString *)userId;
+/**
+ *  插入一条用户
+ *
+ */
+- (void)addUserList:(SDChatMessage *)message andUserID:(NSString *)userId andMessageCount:(NSInteger)count;
+/**
+ *  更新消息个数
+ *
+ */
+- (void)updateUserMessageCount:(NSInteger)count withUserId:(NSString *)userId;
+/**
+ *  删除一条用户
+ *
+ */
+- (void)deleteUserList:(NSString *)userId;
+/**
+ *  获取消息个数
+ *
+ */
+- (NSInteger)getUserMessageCount:(NSString *)userId;
+/**
+ *  获取消息上次发消息的时间
+ *
+ */
+- (NSString *)getUserLastSendTime:(NSString *)userId;
+/**
+ *  某用户的某条消息是否存在
+ *
+ */
+- (BOOL)messageIsAlreadyExist:(NSString *)userId withMessageId:(NSString *)messageId;
+
+/**
+ *  根据MessageID获取某个人的某个消息
+ *
+ */
+- (SDChatMessage *)getMessage:(NSString *)userId withMessageId:(NSString *)messageId;
+
+/**
+ *  根据UserId获取某个人的所有消息
+ *
+ */
+- (NSMutableArray *)getUserChatDataWithUserId:(NSString *)userId;
+/**
+ *  根据UserId获取某个人的数据库最大消息MessageID
+ *
+ */
+- (NSInteger)getTheMaxMessageIdWithUserId:(NSString *)userId;
+/**
+ *  根据UserId获取某页的消息是否全部存在
+ *
+ */
+- (BOOL)isNotMessageExistWithLastMessageId:(NSInteger)lastMessageId andPage:(NSInteger)page andWithUserId:(NSString *)userId;
+/**
+ *  根据UserId获取某个消息列表的用户信息
+ *
+ */
+- (NSString *)getUserInfoFromUserList:(NSString *)userId;
+/**
+ *  根据UserId更新用户信息表userInfos
+ *
+ */
+- (void)updateUserInfo:(NSString *)userInfo withUserId:(NSString *)userId;
+
+/**
+ *  根据UserId获取用户信息userInfos
+ *
+ */
+- (NSString *)getAllUserInfosUserList:(NSString *)userId;
+@end

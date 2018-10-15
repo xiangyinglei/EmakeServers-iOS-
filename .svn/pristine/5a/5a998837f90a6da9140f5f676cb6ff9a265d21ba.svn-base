@@ -1,0 +1,6 @@
+framework module Pods_EmakeServers {
+  umbrella header "Pods-EmakeServers-umbrella.h"
+
+  export *
+  module * { export * }
+}
