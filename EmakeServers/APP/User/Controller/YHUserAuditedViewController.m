@@ -30,8 +30,26 @@
     [self configSubViews];
     [self addRigthDropBtn];
     self.leftTilteOne = [NSArray arrayWithObjects:@"用户类型：",@"代理品类：",@"会员权益：",@"性别：",@"代理城市：",@"注册时间：",@"审核日期：", nil];
-    self.leftTilteTwo = [NSArray arrayWithObjects:@"用户类型：",@"会员权益：",@"性别：",@"注册时间：", nil];
+  //  self.leftTilteTwo = [NSArray arrayWithObjects:@"用户类型：",@"会员权益：",@"性别：",@"注册日期：", nil];
     self.leftTilteThree = [NSArray arrayWithObjects:@"用户类型：",@"性别：",@"注册时间：", nil];
+    
+    
+    self.leftTilteTwo = @[
+                          @[
+                              @{@"text":@"用户类型：",@"value":@""},
+                              @{@"text":@"性别：",   @"value":@""},
+                              @{@"text":@"注册日期：",@"value":@""},
+                              @{@"text":@"备注姓名：",@"value":@""},
+                              @{@"text":@"公司名称：",@"value":@""},
+                              ],
+                          @[
+                              @{@"text":@"代理品类：",@"value":@""},
+                              @{@"text":@"代理城市：",@"value":@""},
+                              @{@"text":@"审核日期：",@"value":@""},
+                              @{@"text":@"审核人："  ,@"value":@""},
+                              
+                            ]
+                          ];
     [self configBottomView];
     [self getUserData];
     // Do any additional setup after loading the view.
@@ -40,12 +58,83 @@
     if (self.userId) {
         [[YHJsonRequest shared] getUsersInfoWithUserId:self.userId SucceededBlock:^(YHUserModel *model) {
             self.model = model;
+            // 设置数据源
+            [self lazyDataSource];
             [self.tableView reloadData];
         } failedBlock:^(NSString *errorMessage) {
             [self.view makeToast:errorMessage duration:1.0 position:CSToastPositionCenter];
         }];
     }
 }
+
+- (void)lazyDataSource{
+    // 注册日期
+    NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
+    NSString *createTime;
+    if (part.count >=2) {
+        createTime = part[0];
+    }else{
+        createTime = self.model.CreateTime;
+    }
+    // 审核日期
+    NSArray *auditPartArr = [self.model.AuditTime componentsSeparatedByString:@" "];
+    NSString *auditTime;
+    if (auditPartArr.count >= 2) {
+        auditTime = auditPartArr[0];
+    }else{
+        auditTime = self.model.AuditTime;
+    }
+    
+    // 会员权益
+    NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+    for (NSDictionary *dict in self.model.IdentityCategorys) {
+        NSString *cateName = [dict objectForKey:@"CategoryBName"];
+        [cateArray addObject:cateName];
+    }
+    // 如果是代理商的话
+    if ([self.model.UserIdentity isEqualToString:@"1"]) {
+        
+        self.leftTilteTwo = @[@[
+                                  @{@"text":@"用户类型：",@"value":@"城市代理商"},
+                                  @{@"text":@"会员权益：",@"value":[cateArray componentsJoinedByString:@"、"]},
+                                  @{@"text":@"性别：",   @"value":[self.model.Sex isEqualToString:@"0"]?@"男":[self.model.Sex isEqualToString:@"1"]?@"女":@"未知"},
+                                  @{@"text":@"注册日期：",@"value":createTime},
+                                  @{@"text":@"备注姓名：",@"value":self.model.RemarkName},
+                                  @{@"text":@"公司名称：",@"value":self.model.RemarkCompany},
+                                  ],
+                              @[
+                                  @{@"text":@"代理品类：",@"value":[cateArray componentsJoinedByString:@"、"]},
+                                  @{@"text":@"代理城市：",@"value":self.model.AgentCity},
+                                  @{@"text":@"审核日期：",@"value":auditTime},
+                                  @{@"text":@"审核人："  ,@"value":self.model.AuditUserId},
+                                  ]
+                              ];
+    }else if ([self.model.UserIdentity isEqualToString:@"2"]){
+        
+        // 会员用户、VIP用户
+        self.leftTilteTwo = @[@[
+                                  @{@"text":@"用户类型：",@"value":@"会员用户"},
+                                  @{@"text":@"会员权益：",@"value": [cateArray componentsJoinedByString:@"、"]},
+                                  @{@"text":@"性别：",   @"value":[self.model.Sex isEqualToString:@"0"]?@"男":[self.model.Sex isEqualToString:@"1"]?@"女":@"未知"},
+                                  @{@"text":@"注册日期：",@"value":createTime},
+                                  @{@"text":@"备注姓名：",@"value":self.model.RemarkName},
+                                  @{@"text":@"公司名称：",@"value":self.model.RemarkCompany},
+                                  ]
+                              ];
+    }else{
+        // 普通用户
+        self.leftTilteTwo = @[
+                              @[
+                                  @{@"text":@"用户类型：",@"value":@"普通用户"},
+                                  @{@"text":@"性别：",   @"value":[self.model.Sex isEqualToString:@"0"]?@"男":[self.model.Sex isEqualToString:@"1"]?@"女":@"未知"},
+                                  @{@"text":@"注册日期：",@"value":createTime},
+                                  @{@"text":@"备注姓名：",@"value":self.model.RemarkName},
+                                  @{@"text":@"公司名称：",@"value":self.model.RemarkCompany},
+                                  ]
+                              ];
+    }
+}
+
 - (void)configBottomView{
     UIView *view =[[UIView alloc]init];
     [self.view addSubview:view];
@@ -136,206 +225,284 @@
 }
 #pragma mark ---UITableViewDataSource,UITableViewDelegate
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
-    if (indexPath.row == 0) {
-        YHUserInfoHeaderTableViewCell *cell = nil;
-        if (!cell) {
-            cell =[[YHUserInfoHeaderTableViewCell alloc]init];
-        }
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        [cell setData:self.model];
-        if (!self.model.RealName||self.model.RealName.length<=0) {
-            self.title = [NSString stringWithFormat:@"用户%@",[self.model.MobileNumber substringFromIndex:self.model.MobileNumber.length-4]];
-        }else{
-            self.title = self.model.RealName;
-        }
-        return cell;
-    }else{
-        YHMineTableViewCell *cell = nil;
-        if (!cell) {
-            cell =[[YHMineTableViewCell alloc]init];
-        }
-        cell.leftLabel.text = self.leftTilteOne[indexPath.row-1];
-        switch (indexPath.row) {
-            case 1:
-                if ([self.model.UserIdentity isEqualToString:@"0"]) {
-                    cell.rightLabel.text = @"普通用户";
-                }else if ([self.model.UserIdentity isEqualToString:@"1"]) {
-                    cell.rightLabel.text = @"城市代理商";
-                }else if ([self.model.UserIdentity isEqualToString:@"2"]) {
-                    cell.rightLabel.text = @"VIP用户";
-                }else if ([self.model.UserIdentity isEqualToString:@"3"]) {
-                    cell.rightLabel.text = @"体验VIP用户";
-                }
-                break;
-            case 2:
-                if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
-                    cell.leftLabel.text = @"会员权益：";
-                    NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
-                    for (NSDictionary *dict in self.model.IdentityCategorys) {
-                        NSString *cateName = [dict objectForKey:@"CategoryBName"];
-                        [cateArray addObject:cateName];
-                    }
-                    cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
-                    if (cateArray.count >0) {
-                        [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-38));
-                        }];
-                        UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
-                        [cell.contentView addSubview:rigthImage];
-                        
-                        [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-20));
-                            make.width.mas_equalTo(WidthRate(14));
-                            make.height.mas_equalTo(WidthRate(14));
-                            make.centerY.mas_equalTo(cell.contentView.mas_centerY);
-                        }];
-                    }
-                    
-                }else if ([self.model.UserIdentity isEqualToString:@"1"]){
-                    cell.leftLabel.text = @"代理品类：";
-                    NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
-                    for (NSDictionary *dict in self.model.IdentityCategorys) {
-                        NSString *cateName = [dict objectForKey:@"CategoryBName"];
-                        [cateArray addObject:cateName];
-                    }
-                    cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
-                    if (cateArray.count >0) {
-                        [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-38));
-                        }];
-                        UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
-                        [cell.contentView addSubview:rigthImage];
-                        
-                        [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-20));
-                            make.width.mas_equalTo(WidthRate(14));
-                            make.height.mas_equalTo(WidthRate(14));
-                            make.centerY.mas_equalTo(cell.contentView.mas_centerY);
-                        }];
-                    }
-                }else{
-                    cell.leftLabel.text = @"性别：";
-                    if ([self.model.Sex isEqualToString:@"0"]) {
-                        cell.rightLabel.text = @"男";
-                    }else if ([self.model.Sex isEqualToString:@"1"]){
-                        cell.rightLabel.text = @"女";
-                    }else{
-                        cell.rightLabel.text = @"保密";
-                    }
-                }
-                break;
-            case 3:
-                if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
-                    cell.leftLabel.text = @"性别：";
-                    if ([self.model.Sex isEqualToString:@"0"]) {
-                        cell.rightLabel.text = @"男";
-                    }else if ([self.model.Sex isEqualToString:@"1"]){
-                        cell.rightLabel.text = @"女";
-                    }else{
-                        cell.rightLabel.text = @"保密";
-                    }
-                }else if ([self.model.UserIdentity isEqualToString:@"1"]){
-                    cell.leftLabel.text = @"会员权益：";
-                    NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
-                    for (NSDictionary *dict in self.model.IdentityCategorys) {
-                        NSString *cateName = [dict objectForKey:@"CategoryBName"];
-                        [cateArray addObject:cateName];
-                    }
-                    cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
-                    if (cateArray.count >0) {
-                        [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-38));
-                        }];
-                        UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
-                        [cell.contentView addSubview:rigthImage];
-                        
-                        [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
-                            make.right.mas_equalTo(WidthRate(-20));
-                            make.width.mas_equalTo(WidthRate(14));
-                            make.height.mas_equalTo(WidthRate(14));
-                            make.centerY.mas_equalTo(cell.contentView.mas_centerY);
-                        }];
-                    }
-                }else{
-                    cell.leftLabel.text = @"注册时间：";
-                    NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
-                    if (part.count ==2) {
-                        cell.rightLabel.text = part[0];
-                    }else{
-                        cell.rightLabel.text = self.model.CreateTime;
-                    }
-                }
-                break;
-            case 4:
-                if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
-                    cell.leftLabel.text = @"注册时间：";
-                    NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
-                    if (part.count ==2) {
-                        cell.rightLabel.text = part[0];
-                    }else{
-                        cell.rightLabel.text = self.model.CreateTime;
-                    }
-                }else if ([self.model.UserIdentity isEqualToString:@"1"]){
-                    cell.leftLabel.text = @"性别：";
-                    if ([self.model.Sex isEqualToString:@"0"]) {
-                        cell.rightLabel.text = @"男";
-                    }else if ([self.model.Sex isEqualToString:@"1"]){
-                        cell.rightLabel.text = @"女";
-                    }else{
-                        cell.rightLabel.text = @"保密";
-                    }
-                }
-                break;
-            case 5:
-                cell.leftLabel.text = @"代理城市： ";
-                cell.rightLabel.text = self.model.AgentCity;
-                break;
-            case 6:{
-                cell.leftLabel.text = @"注册时间：";
-                NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
-                if (part.count ==2) {
-                    cell.rightLabel.text = part[0];
-                }else{
-                    cell.rightLabel.text = self.model.CreateTime;
-                }
+    
+    if (indexPath.section == 0) {
+        if (indexPath.row == 0) {
+            YHUserInfoHeaderTableViewCell *cell = nil;
+            if (!cell) {
+                cell =[[YHUserInfoHeaderTableViewCell alloc]init];
             }
-                break;
-            case 7:
-                cell.leftLabel.text = @"审核日期：";
-                cell.rightLabel.text = self.model.AuditTime;
-                break;
-            default:
-                break;
+            cell.selectionStyle = UITableViewCellSelectionStyleNone;
+            [cell setData:self.model];
+            if (!self.model.RealName||self.model.RealName.length<=0) {
+                self.title = [NSString stringWithFormat:@"用户%@",[self.model.MobileNumber substringFromIndex:self.model.MobileNumber.length-4]];
+            }else{
+                self.title = self.model.RealName;
+            }
+            return cell;
+        }else{
+            NSDictionary *dataSource = self.leftTilteTwo[0][indexPath.row - 1];
+            static NSString *cellID = @"cellID";
+            YHMineTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
+            if (!cell) {
+                cell =[[YHMineTableViewCell alloc]initWithStyle:(UITableViewCellStyleDefault) reuseIdentifier:cellID];
+            }
+            cell.leftLabel.text  = dataSource[@"text"];
+            cell.rightLabel.text = dataSource[@"value"];
+            if ([dataSource[@"text"] isEqualToString:@"会员权益："] && [dataSource[@"value"] length] > 0) {
+                [self updateConstraintWithCell:cell];
+            }
+            /* switch (indexPath.row) {
+                case 1:
+                    if ([self.model.UserIdentity isEqualToString:@"0"]) {
+                        cell.rightLabel.text = @"普通用户";
+                    }else if ([self.model.UserIdentity isEqualToString:@"1"]) {
+                        cell.rightLabel.text = @"城市代理商";
+                    }else if ([self.model.UserIdentity isEqualToString:@"2"]) {
+                        cell.rightLabel.text = @"VIP用户";
+                    }else if ([self.model.UserIdentity isEqualToString:@"3"]) {
+                        //   cell.rightLabel.text = @"体验VIP用户";
+                        cell.rightLabel.text = @"";
+                    }
+                    break;
+                case 2:
+                    if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
+                        cell.leftLabel.text = @"会员权益：";
+                        NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+                        for (NSDictionary *dict in self.model.IdentityCategorys) {
+                            NSString *cateName = [dict objectForKey:@"CategoryBName"];
+                            [cateArray addObject:cateName];
+                        }
+                        cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
+                        if (cateArray.count >0) {
+                            [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-38));
+                            }];
+                            UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
+                            [cell.contentView addSubview:rigthImage];
+                            
+                            [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-20));
+                                make.width.mas_equalTo(WidthRate(14));
+                                make.height.mas_equalTo(WidthRate(14));
+                                make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                            }];
+                        }
+                        
+                    }else if ([self.model.UserIdentity isEqualToString:@"1"]){
+                        cell.leftLabel.text = @"代理品类：";
+                        NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+                        for (NSDictionary *dict in self.model.IdentityCategorys) {
+                            NSString *cateName = [dict objectForKey:@"CategoryBName"];
+                            [cateArray addObject:cateName];
+                        }
+                        cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
+                        if (cateArray.count >0) {
+                            [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-38));
+                            }];
+                            UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
+                            [cell.contentView addSubview:rigthImage];
+                            
+                            [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-20));
+                                make.width.mas_equalTo(WidthRate(14));
+                                make.height.mas_equalTo(WidthRate(14));
+                                make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                            }];
+                        }
+                    }else{
+                        cell.leftLabel.text = @"性别：";
+                        if ([self.model.Sex isEqualToString:@"0"]) {
+                            cell.rightLabel.text = @"男";
+                        }else if ([self.model.Sex isEqualToString:@"1"]){
+                            cell.rightLabel.text = @"女";
+                        }else{
+                            cell.rightLabel.text = @"保密";
+                        }
+                    }
+                    break;
+                case 3:
+                    if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
+                        cell.leftLabel.text = @"性别：";
+                        if ([self.model.Sex isEqualToString:@"0"]) {
+                            cell.rightLabel.text = @"男";
+                        }else if ([self.model.Sex isEqualToString:@"1"]){
+                            cell.rightLabel.text = @"女";
+                        }else{
+                            cell.rightLabel.text = @"保密";
+                        }
+                    }else if ([self.model.UserIdentity isEqualToString:@"1"]){
+                        cell.leftLabel.text = @"会员权益：";
+                        NSMutableArray *cateArray = [NSMutableArray arrayWithCapacity:0];
+                        for (NSDictionary *dict in self.model.IdentityCategorys) {
+                            NSString *cateName = [dict objectForKey:@"CategoryBName"];
+                            [cateArray addObject:cateName];
+                        }
+                        cell.rightLabel.text = [cateArray componentsJoinedByString:@"、"];
+                        if (cateArray.count >0) {
+                            [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-38));
+                            }];
+                            UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
+                            [cell.contentView addSubview:rigthImage];
+                            
+                            [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+                                make.right.mas_equalTo(WidthRate(-20));
+                                make.width.mas_equalTo(WidthRate(14));
+                                make.height.mas_equalTo(WidthRate(14));
+                                make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+                            }];
+                        }
+                    }else{
+                        cell.leftLabel.text = @"注册时间：";
+                        NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
+                        if (part.count ==2) {
+                            cell.rightLabel.text = part[0];
+                        }else{
+                            cell.rightLabel.text = self.model.CreateTime;
+                        }
+                    }
+                    break;
+                case 4:
+                    if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
+                        cell.leftLabel.text = @"注册时间：";
+                        NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
+                        if (part.count ==2) {
+                            cell.rightLabel.text = part[0];
+                        }else{
+                            cell.rightLabel.text = self.model.CreateTime;
+                        }
+                    }else if ([self.model.UserIdentity isEqualToString:@"1"]){
+                        cell.leftLabel.text = @"性别：";
+                        if ([self.model.Sex isEqualToString:@"0"]) {
+                            cell.rightLabel.text = @"男";
+                        }else if ([self.model.Sex isEqualToString:@"1"]){
+                            cell.rightLabel.text = @"女";
+                        }else{
+                            cell.rightLabel.text = @"保密";
+                        }
+                    }
+                    break;
+                case 5:
+                    cell.leftLabel.text = @"代理城市： ";
+                    cell.rightLabel.text = self.model.AgentCity;
+                    break;
+                case 6:{
+                    cell.leftLabel.text = @"注册时间：";
+                    NSArray *part = [self.model.CreateTime componentsSeparatedByString:@" "];
+                    if (part.count ==2) {
+                        cell.rightLabel.text = part[0];
+                    }else{
+                        cell.rightLabel.text = self.model.CreateTime;
+                    }
+                }
+                    break;
+                case 7:
+                    cell.leftLabel.text = @"审核日期：";
+                    cell.rightLabel.text = self.model.AuditTime;
+                    break;
+                default:
+                    break;
+            }*/
+            return cell;
         }
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        return cell;
     }
+        NSDictionary *dataSource = self.leftTilteTwo[1][indexPath.row];
+        static NSString *cellID = @"cell";
+        YHMineTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:cellID];
+        if (!cell) {
+             cell =[[YHMineTableViewCell alloc]initWithStyle:(UITableViewCellStyleDefault)reuseIdentifier:cellID];
+         }
+             cell.leftLabel.text  = dataSource[@"text"];
+             cell.rightLabel.text = dataSource[@"value"];
+          if ([dataSource[@"text"] isEqualToString:@"代理品类："] && [dataSource[@"value"] length] > 0) {
+              [self updateConstraintWithCell:cell];
+          }
+            return cell;
+}
+
+- (void)updateConstraintWithCell:(YHMineTableViewCell*)cell{
+    
+    [cell.rightLabel mas_updateConstraints:^(MASConstraintMaker *make) {
+        make.right.mas_equalTo(WidthRate(-38));
+    }];
+    UIImageView *rigthImage = [[UIImageView alloc]initWithImage:[UIImage imageNamed:@"direction_down"]];
+    [cell.contentView addSubview:rigthImage];
+    
+    [rigthImage mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.right.mas_equalTo(WidthRate(-20));
+        make.width.mas_equalTo(WidthRate(14));
+        make.height.mas_equalTo(WidthRate(14));
+        make.centerY.mas_equalTo(cell.contentView.mas_centerY);
+    }];
 }
 
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView{
     
-    return 1;
+   // return 1;
+    return self.leftTilteTwo.count;
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section{
-    if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
+   /* if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
         return self.leftTilteTwo.count+1;
     }else if ([self.model.UserIdentity isEqualToString:@"1"]){
        return self.leftTilteOne.count+1;
     }else{
         return self.leftTilteThree.count+1;
+    }*/
+    if (section == 0) {
+        return [self.leftTilteTwo[section] count] + 1;
     }
+       return [self.leftTilteTwo[section] count];
 }
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath{
     
-    if (indexPath.row == 0) {
+    if (indexPath.row == 0 && indexPath.section == 0) {
         return HeightRate(90);
     }else{
         return HeightRate(44);
     }
 }
 - (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section{
+    if (section == 0) {
+        return TableViewHeaderNone;
+    }
+        return HeightRate(50);
+}
+
+- (nullable UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section{
+    if (section == 0) {
+        return nil;
+    }
+    UIView  *headerView = [[UIView alloc]initWithFrame:CGRectMake(0, 0, ScreenWidth, HeightRate(50))];
     
-    return TableViewHeaderNone;
+    headerView.backgroundColor = [UIColor colorWithHexString:@"E5EFFC"];
+    
+    UILabel *textLabel = [[UILabel alloc]init];
+    textLabel.textAlignment = NSTextAlignmentCenter;
+    textLabel.text = @"已审核城市代理商";
+    textLabel.textColor = [UIColor colorWithHexString:@"6699FF"];
+    textLabel.font = [UIFont systemFontOfSize:16];
+    [headerView addSubview:textLabel];
+    [textLabel mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(150);
+        make.height.mas_equalTo(HeightRate(50));
+        make.centerY.mas_equalTo(headerView.mas_centerY);
+        make.centerX.mas_equalTo(headerView.mas_centerX);
+    }];
+    
+    UIImageView *daiImgView = [[UIImageView alloc]init];
+    daiImgView.image = [UIImage imageNamed:@"dailishangbig.png"];
+    [headerView addSubview:daiImgView];
+    [daiImgView mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.width.mas_equalTo(32);
+        make.height.mas_equalTo(31);
+        make.centerY.mas_equalTo(textLabel.mas_centerY);
+        make.left.mas_equalTo(HeightRate(90));
+    }];
+    
+    return headerView;
 }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
     if ([self.model.UserIdentity isEqualToString:@"2"]||[self.model.UserIdentity isEqualToString:@"3"]) {
@@ -349,22 +516,26 @@
             [self presentViewController:vc animated:YES completion:nil];
         }
     }else if ([self.model.UserIdentity isEqualToString:@"1"]){
-        if (indexPath.row == 2) {
-            if (self.model.IdentityCategorys.count <= 0) {
-                return;
+        if (indexPath.section == 0) {
+            if (indexPath.row == 2) {
+                if (self.model.IdentityCategorys.count <= 0) {
+                    return;
+                }
+                YHDelegateCategoryPresentViewController *vc = [[YHDelegateCategoryPresentViewController alloc] init];
+                vc.isDelegateOrNot = NO;
+                vc.cateArray = self.model.IdentityCategorys;
+                [self presentViewController:vc animated:YES completion:nil];
             }
-            YHDelegateCategoryPresentViewController *vc = [[YHDelegateCategoryPresentViewController alloc] init];
-            vc.isDelegateOrNot = YES;
-            vc.cateArray = self.model.IdentityCategorys;
-            [self presentViewController:vc animated:YES completion:nil];
-        }else if (indexPath.row == 3) {
-            if (self.model.IdentityCategorys.count <= 0) {
-                return;
+        }else{
+            if (indexPath.row == 0) {
+                if (self.model.IdentityCategorys.count <= 0) {
+                    return;
+                }
+                YHDelegateCategoryPresentViewController *vc = [[YHDelegateCategoryPresentViewController alloc] init];
+                vc.isDelegateOrNot = YES;
+                vc.cateArray = self.model.IdentityCategorys;
+                [self presentViewController:vc animated:YES completion:nil];
             }
-            YHDelegateCategoryPresentViewController *vc = [[YHDelegateCategoryPresentViewController alloc] init];
-            vc.isDelegateOrNot = NO;
-            vc.cateArray = self.model.IdentityCategorys;
-            [self presentViewController:vc animated:YES completion:nil];
         }
     }
     

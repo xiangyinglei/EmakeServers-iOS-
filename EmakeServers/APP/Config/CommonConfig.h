@@ -11,7 +11,11 @@
 
 //MQTT
 //#define MQTT_IP             @"api.emake.cn"
-#define MQTT_IP             @"mallapi.emake.cn"
+// 生产
+//#define MQTT_IP             @"mallapi.emake.cn"
+// 测试
+#define MQTT_IP              @"mallapitest.emake.cn"
+
 #define MQTT_PORT           1883
 
 //友盟统计

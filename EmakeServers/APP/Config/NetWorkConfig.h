@@ -15,9 +15,9 @@
 //请求地址
 
 //#define CLOUD_URL(res)  [NSString stringWithFormat:@"http://mallapi.emake.cn/%@",res]//试服务器
-#define CLOUD_URL(res)  [NSString stringWithFormat:@"http://mallapi.emake.cn/%@",res]//本地地址
+//#define CLOUD_URL(res)  [NSString stringWithFormat:@"http://mallapi.emake.cn/%@",res]//本地地址
 #define CLOUDTest_URL(res)  [NSString stringWithFormat:@"http://192.168.0.1212:3100/%@",res]//本地地址
-
+#define CLOUD_URL(res)  [NSString stringWithFormat:@"http://mallapitest.emake.cn/%@",res]//测试服务器
 
 //服务器统一返回字段
 #define RESPONSE_RESULT_CODE                    @"ResultCode"

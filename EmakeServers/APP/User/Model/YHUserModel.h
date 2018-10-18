@@ -13,6 +13,8 @@
 @property (nonatomic,copy)NSString *Address;
 @property (nonatomic,copy)NSString *AuditRemark;
 @property (nonatomic,copy)NSString *AuditTime;
+// 审核人
+@property (nonatomic,copy)NSString *AuditUserId;
 @property (nonatomic,copy)NSString *AuditUserName;
 @property (nonatomic,copy)NSString *BusinessCategory;
 @property (nonatomic,copy)NSString *BusinessCategoryName;
@@ -51,4 +53,9 @@
 @property (nonatomic,copy)NSString *CardUrl;
 @property (nonatomic,strong)NSArray *IdentityCategorysName;
 @property (nonatomic,strong)NSArray *IdentityCategorys;
+// 备注姓名
+@property (nonatomic,copy)NSString *RemarkName;
+// 备注公司
+@property (nonatomic,copy)NSString *RemarkCompany;
+
 @end

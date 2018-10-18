@@ -12,9 +12,19 @@
 
 @end
 @implementation YHMineTableViewCell
-- (instancetype)init{
-    if (self = [super init]) {
+
+- (id)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier
+{
+    if (self = [super initWithStyle:style reuseIdentifier:reuseIdentifier]) {
+    
+         self.selectionStyle = UITableViewCellSelectionStyleNone;
         
+        [self createUI];
+    }
+    return self;
+}
+
+- (void)createUI{
         self.leftLabel = [[UILabel alloc]init];
         self.leftLabel.font = SYSTEM_FONT(AdaptFont(16));
         self.leftLabel.text = @"用户名";
@@ -50,8 +60,6 @@
             make.bottom.mas_equalTo(0);
             make.height.mas_equalTo(1);
         }];
-    }
-    return self;
 }
 - (void)awakeFromNib {
     [super awakeFromNib];

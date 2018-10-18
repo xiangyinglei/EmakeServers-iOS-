@@ -11,4 +11,7 @@
 @interface YHMineTableViewCell : UITableViewCell
 @property (nonatomic,retain)UILabel *leftLabel;
 @property (nonatomic,retain)UILabel *rightLabel;
+
+
+
 @end

@@ -48,7 +48,7 @@
 - (instancetype)initWithVoicePath:(NSString *)voicePath voiceDuration:(NSString *)duration Type:(NSString *)Type{
     self.Type = Type;
     self.Voice = voicePath;
-    self.VoiceDuration = duration;
+    self.VoiceDuration = duration.intValue;
     return self;
 }
 - (instancetype)initWithText:(NSString *)jsonText FilePath:(NSString *)filePath Type:(NSString *)Type{
